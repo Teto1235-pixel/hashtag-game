@@ -29,10 +29,9 @@
     canvas.height = MAP_H * CELL_SIZE;
 
     // ---------- ЗАГЛУШКА КАРТЫ ----------
-    // Пока все клетки пустые (ownerId = null)
     const map = Array(MAP_H).fill(null).map(() =>
-      Array(MAP_W).fill({ ownerId: null })
-    );
+  Array(MAP_W).fill().map(() => ({ ownerId: null, hashtag: '' }))
+);
 
     // ---------- ФУНКЦИЯ ОТРИСОВКИ ----------
     function drawMap() {
