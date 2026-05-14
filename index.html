@@ -10,23 +10,69 @@
   </style>
 </head>
 <body>
-  <div id="info">Загрузка...</div>
+  <div id="info" style="position:absolute;top:10px;left:10px;z-index:10;">Загрузка...</div>
+  <canvas id="gameCanvas"></canvas>
 
-  <!-- Подключаем VK Bridge для взаимодействия с клиентом ВК -->
   <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
-
   <script>
-    // Отправляем событие инициализации, чтобы ВК понял, что мы готовы
-    vkBridge.send('VKWebAppInit').then(() => {
-      console.log('Mini App инициализирован');
-      // Получаем данные пользователя
-      return vkBridge.send('VKWebAppGetUserInfo');
-    }).then(data => {
-      document.getElementById('info').textContent =
-        `Привет, ${data.first_name}! Твой ID: ${data.id}`;
-    }).catch(error => {
-      document.getElementById('info').textContent = 'Ошибка: ' + error;
-    });
+    // ---------- НАСТРОЙКИ ПОЛЯ ----------
+    const CELL_SIZE = 20;      // размер клетки в пикселях
+    const MAP_W = 40;          // ширина в клетках
+    const MAP_H = 30;          // высота в клетках
+
+    // ---------- ХОЛСТ ----------
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Подгоняем размер холста под количество клеток
+    canvas.width = MAP_W * CELL_SIZE;
+    canvas.height = MAP_H * CELL_SIZE;
+
+    // ---------- ЗАГЛУШКА КАРТЫ ----------
+    // Пока все клетки пустые (ownerId = null)
+    const map = Array(MAP_H).fill(null).map(() =>
+      Array(MAP_W).fill({ ownerId: null })
+    );
+
+    // ---------- ФУНКЦИЯ ОТРИСОВКИ ----------
+    function drawMap() {
+      // Белый фон
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Сетка
+      ctx.strokeStyle = '#e0e0e0';
+      ctx.lineWidth = 0.5;
+      for (let x = 0; x <= MAP_W; x++) {
+        ctx.beginPath();
+        ctx.moveTo(x * CELL_SIZE, 0);
+        ctx.lineTo(x * CELL_SIZE, MAP_H * CELL_SIZE);
+        ctx.stroke();
+      }
+      for (let y = 0; y <= MAP_H; y++) {
+        ctx.beginPath();
+        ctx.moveTo(0, y * CELL_SIZE);
+        ctx.lineTo(MAP_W * CELL_SIZE, y * CELL_SIZE);
+        ctx.stroke();
+      }
+
+      // Пока никаких цветных клеток, только сетка
+    }
+
+    // ---------- ИНИЦИАЛИЗАЦИЯ VK BRIDGE ----------
+    vkBridge.send('VKWebAppInit')
+      .then(() => {
+        console.log('VK Bridge инициализирован');
+        drawMap(); // Рисуем сразу после готовности
+        return vkBridge.send('VKWebAppGetUserInfo');
+      })
+      .then(data => {
+        document.getElementById('info').textContent =
+          `Привет, ${data.first_name}! ID: ${data.id}`;
+      })
+      .catch(error => {
+        document.getElementById('info').textContent = 'Ошибка: ' + error;
+      });
   </script>
 </body>
 </html>
