@@ -5,73 +5,175 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hashtag Territory</title>
   <style>
-    body { margin: 0; padding: 0; background: #fff; font-family: monospace; }
-    #info { position: absolute; top: 10px; left: 10px; }
+    body {
+      margin: 0;
+      padding: 0;
+      background: #fff;
+      font-family: monospace;
+      overflow: hidden; /* чтобы не было скролла */
+    }
+    #info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      background: rgba(255,255,255,0.9);
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    canvas {
+      display: block;
+    }
   </style>
 </head>
 <body>
-  <div id="info" style="position:absolute;top:10px;left:10px;z-index:10;">Загрузка...</div>
+  <div id="info">Загрузка...</div>
   <canvas id="gameCanvas"></canvas>
 
+  <!-- VK Bridge -->
   <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
+
   <script>
-    // ---------- НАСТРОЙКИ ПОЛЯ ----------
-    const CELL_SIZE = 20;      // размер клетки в пикселях
-    const MAP_W = 40;          // ширина в клетках
-    const MAP_H = 30;          // высота в клетках
+    // ---------- НАСТРОЙКИ ----------
+    const CELL_SIZE = 20;      // пикселей на клетку
+    const MAP_W = 40;          // клеток по ширине
+    const MAP_H = 30;          // клеток по высоте
+    const SERVER_URL = 'https://твой-ngrok-адрес.ngrok.io'; // ⚠️ замени на свой!
 
     // ---------- ХОЛСТ ----------
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-
-    // Подгоняем размер холста под количество клеток
     canvas.width = MAP_W * CELL_SIZE;
     canvas.height = MAP_H * CELL_SIZE;
 
-    // ---------- ЗАГЛУШКА КАРТЫ ----------
-    const map = Array(MAP_H).fill(null).map(() =>
-  Array(MAP_W).fill().map(() => ({ ownerId: null, hashtag: '' }))
-);
+    // ---------- ЗАГЛУШКА ИГРОКА ----------
+    const currentPlayer = {
+      id: null,          // заполним после VK Bridge
+      likes: 0,
+      color: '#cccccc',  // серый, пока не получим с сервера
+      hashtag: ''
+    };
 
-    // ---------- ФУНКЦИЯ ОТРИСОВКИ ----------
+    // ---------- КАРТА (изначально пустая) ----------
+    let map = Array(MAP_H).fill(null).map(() =>
+      Array(MAP_W).fill().map(() => ({ ownerId: null, hashtag: '' }))
+    );
+
+    // ---------- ОТРИСОВКА ----------
     function drawMap() {
-      // Белый фон
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Сетка
-      ctx.strokeStyle = '#e0e0e0';
-      ctx.lineWidth = 0.5;
-      for (let x = 0; x <= MAP_W; x++) {
-        ctx.beginPath();
-        ctx.moveTo(x * CELL_SIZE, 0);
-        ctx.lineTo(x * CELL_SIZE, MAP_H * CELL_SIZE);
-        ctx.stroke();
-      }
-      for (let y = 0; y <= MAP_H; y++) {
-        ctx.beginPath();
-        ctx.moveTo(0, y * CELL_SIZE);
-        ctx.lineTo(MAP_W * CELL_SIZE, y * CELL_SIZE);
-        ctx.stroke();
-      }
+      // Рисуем клетки с владельцами
+      for (let y = 0; y < MAP_H; y++) {
+        for (let x = 0; x < MAP_W; x++) {
+          const cell = map[y][x];
+          const px = x * CELL_SIZE;
+          const py = y * CELL_SIZE;
 
-      // Пока никаких цветных клеток, только сетка
+          if (cell.ownerId) {
+            // Если id игрока известен и совпадает – его цвет, иначе серый
+            ctx.fillStyle = (currentPlayer.id && cell.ownerId === currentPlayer.id)
+              ? currentPlayer.color
+              : '#cccccc';
+            ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
+
+            // Белая рамка
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(px, py, CELL_SIZE, CELL_SIZE);
+
+            // Подпись хештега (первые 4 символа)
+            ctx.fillStyle = '#000000';
+            ctx.font = '8px monospace';
+            ctx.fillText(cell.hashtag.substring(0, 4), px + 2, py + 10);
+          } else {
+            // Пустая клетка – лёгкая сетка
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 0.5;
+            ctx.strokeRect(px, py, CELL_SIZE, CELL_SIZE);
+          }
+        }
+      }
     }
 
-    // ---------- ИНИЦИАЛИЗАЦИЯ VK BRIDGE ----------
+    // ---------- ИНИЦИАЛИЗАЦИЯ ----------
     vkBridge.send('VKWebAppInit')
-      .then(() => {
-        console.log('VK Bridge инициализирован');
-        drawMap(); // Рисуем сразу после готовности
-        return vkBridge.send('VKWebAppGetUserInfo');
-      })
+      .then(() => vkBridge.send('VKWebAppGetUserInfo'))
       .then(data => {
+        currentPlayer.id = data.id;
+        document.getElementById('info').textContent = `Привет, ${data.first_name}!`;
+
+        // Присоединяемся к серверу
+        return fetch(`${SERVER_URL}/join`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: data.id })
+        });
+      })
+      .then(r => r.json())
+      .then(state => {
+        // Обновляем данные игрока с сервера
+        currentPlayer.likes = state.player.likes;
+        currentPlayer.color = state.player.color;
+        currentPlayer.hashtag = state.player.hashtag || '';
+        // Берём карту с сервера
+        map = state.map;
+        drawMap();
         document.getElementById('info').textContent =
-          `Привет, ${data.first_name}! ID: ${data.id}`;
+          `Лайков: ${currentPlayer.likes}`;
       })
       .catch(error => {
         document.getElementById('info').textContent = 'Ошибка: ' + error;
+        console.error(error);
       });
+
+    // ---------- ОБРАБОТКА КЛИКОВ ----------
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const mouseX = (e.clientX - rect.left) * scaleX;
+      const mouseY = (e.clientY - rect.top) * scaleY;
+      const gridX = Math.floor(mouseX / CELL_SIZE);
+      const gridY = Math.floor(mouseY / CELL_SIZE);
+
+      if (gridX < 0 || gridX >= MAP_W || gridY < 0 || gridY >= MAP_H) return;
+
+      // Пока атакуем с фиксированной силой 1 (позже добавим бегунок)
+      fetch(`${SERVER_URL}/attack`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentPlayer.id,
+          x: gridX,
+          y: gridY,
+          amount: 1
+        })
+      })
+      .then(r => r.json())
+      .then(res => {
+        if (res.success) {
+          map = res.map;
+          currentPlayer.likes = res.player.likes;
+          drawMap();
+          document.getElementById('info').textContent =
+            `Лайков: ${currentPlayer.likes}`;
+        } else {
+          // Показываем ошибку (например, «недостаточно лайков»)
+          document.getElementById('info').textContent =
+            `Ошибка: ${res.error}`;
+          // Если сервер вернул обновлённые данные, применяем их
+          if (res.map) map = res.map;
+          if (res.player) currentPlayer.likes = res.player.likes;
+          drawMap();
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        document.getElementById('info').textContent = 'Нет связи с сервером';
+      });
+    });
   </script>
 </body>
 </html>
