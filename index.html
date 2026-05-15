@@ -123,32 +123,18 @@
     document.addEventListener('gestureend', e => e.preventDefault());
     canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-    // ---------- УМНЫЕ ОГРАНИЧЕНИЯ КАМЕРЫ ----------
-    function applyDragConstraints() {
+    // ---------- ГИБКИЕ ГРАНИЦЫ КАМЕРЫ (можно подвести край к центру) ----------
+    function clampCamera() {
       const worldW = MAP_W * CELL_SIZE;
       const worldH = MAP_H * CELL_SIZE;
       const visibleW = canvas.width / zoom;
       const visibleH = canvas.height / zoom;
 
-      // Если мир помещается в экран — даём небольшой манёвр, но центрируем, не допуская сильных сдвигов
-      if (worldW <= visibleW) {
-        const centerX = (worldW - visibleW) / 2;
-        const maxShiftX = visibleW * 0.2; // можно сместить на 20% экрана
-        viewX = Math.max(centerX - maxShiftX, Math.min(viewX, centerX + maxShiftX));
-      } else {
-        // Мир больше экрана: разрешаем выходить за края на 30% видимой области
-        const padX = visibleW * 0.3;
-        viewX = Math.max(-padX, Math.min(viewX, worldW - visibleW + padX));
-      }
-
-      if (worldH <= visibleH) {
-        const centerY = (worldH - visibleH) / 2;
-        const maxShiftY = visibleH * 0.2;
-        viewY = Math.max(centerY - maxShiftY, Math.min(viewY, centerY + maxShiftY));
-      } else {
-        const padY = visibleH * 0.3;
-        viewY = Math.max(-padY, Math.min(viewY, worldH - visibleH + padY));
-      }
+      // Разрешаем сдвигать так, чтобы любой край мог оказаться в центре экрана
+      // Минимальный view = -visibleW/2 (т.е. левый край мира в центре)
+      // Максимальный view = worldW - visibleW/2 (правый край мира в центре)
+      viewX = Math.max(-visibleW / 2, Math.min(viewX, worldW - visibleW / 2));
+      viewY = Math.max(-visibleH / 2, Math.min(viewY, worldH - visibleH / 2));
     }
 
     function isValidMap(m) {
@@ -298,7 +284,17 @@
     function centerOnMyCells() {
       if (!currentPlayer.hashtag) return;
       const bounds = getTerritoryBounds(currentPlayer.id);
-      if (bounds.count === 0) return;
+      if (bounds.count === 0) {
+        // fallback на точку спауна
+        if (currentPlayer.spawnX != null && currentPlayer.spawnY != null) {
+          const centerX = currentPlayer.spawnX * CELL_SIZE + CELL_SIZE/2;
+          const centerY = currentPlayer.spawnY * CELL_SIZE + CELL_SIZE/2;
+          viewX = centerX - canvas.width / (2 * zoom);
+          viewY = centerY - canvas.height / (2 * zoom);
+        }
+        drawMap();
+        return;
+      }
       const visibleW = canvas.width, visibleH = canvas.height;
       const territoryW = bounds.width*CELL_SIZE, territoryH = bounds.height*CELL_SIZE;
       const fitZoom = Math.min(visibleW/territoryW, visibleH/territoryH, MAX_ZOOM) * 0.9;
@@ -362,10 +358,10 @@
       };
     }
 
-    // ---------- DRAG (чувствительность улучшена) ----------
+    // ---------- DRAG ----------
     let isDragging = false, dragStartX, dragStartY, dragStartViewX, dragStartViewY;
     canvas.addEventListener('mousedown', e => {
-      if (e.button !== 0) return; // только левая
+      if (e.button !== 0) return;
       isDragging = true;
       dragStartX = e.clientX; dragStartY = e.clientY;
       dragStartViewX = viewX; dragStartViewY = viewY;
@@ -374,12 +370,11 @@
     });
     window.addEventListener('mousemove', e => {
       if (!isDragging) return;
-      // Прямое соответствие без деления на zoom – движение мыши = движение камеры в мировых пикселях
       const dx = e.clientX - dragStartX;
       const dy = e.clientY - dragStartY;
       viewX = dragStartViewX - dx / zoom;
       viewY = dragStartViewY - dy / zoom;
-      applyDragConstraints();
+      clampCamera();
       drawMap();
     });
     window.addEventListener('mouseup', () => {
@@ -399,6 +394,7 @@
         viewX = worldX*newZoom - mx;
         viewY = worldY*newZoom - my;
         zoom = newZoom;
+        // не вызываем clampCamera, чтобы не сбить позицию
         drawMap();
       }
     });
@@ -417,7 +413,7 @@
         const dy = t[0].clientY - dragStartY;
         viewX = dragStartViewX - dx/zoom;
         viewY = dragStartViewY - dy/zoom;
-        applyDragConstraints();
+        clampCamera();
         drawMap();
       } else if (t.length===2 && lastTouches) {
         const newDist = Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
@@ -566,7 +562,9 @@
           showSelection(AVAILABLE_HASHTAGS || [], taken);
         }
         resizeCanvas();
-        if (currentPlayer.spawnX !== null) centerOnMyCells();
+        if (currentPlayer.spawnX !== null && currentPlayer.hashtag) {
+          centerOnMyCells();
+        }
       })
       .catch(err => { updateInfo('Ошибка: '+err); console.error(err); });
 
