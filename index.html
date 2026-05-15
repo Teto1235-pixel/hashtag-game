@@ -24,6 +24,12 @@
     #gameover { display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:100; justify-content:center; align-items:center; flex-direction:column; color:white; font-size:24px; }
     button { margin:5px; padding:8px 12px; cursor:pointer; font-family:'Courier New',monospace; }
     input[type=range] { width:200px; }
+
+    /* Ползунки */
+    #vSliderContainer { position:absolute; left:10px; top:50%; transform:translateY(-50%); z-index:15; display:none; }
+    #vSlider { writing-mode:bt-lr; -webkit-appearance:slider-vertical; width:20px; height:200px; }
+    #hSliderContainer { position:absolute; bottom:10px; left:50%; transform:translateX(-50%); z-index:15; display:none; }
+    #hSlider { width:300px; }
   </style>
 </head>
 <body>
@@ -34,6 +40,11 @@
   </div>
   <button id="menuBtn" title="Меню">⚙️</button>
   <div id="leaderboard"></div>
+
+  <!-- Ползунки -->
+  <div id="vSliderContainer"><input type="range" id="vSlider" min="0" max="100" value="0" orient="vertical"></div>
+  <div id="hSliderContainer"><input type="range" id="hSlider" min="0" max="100" value="0"></div>
+
   <div id="menuPanel">
     <p>Вы играете за: <strong><span id="menuHashtag"></span></strong></p>
     <p id="menuCanChange"></p>
@@ -77,6 +88,7 @@
       const container = document.getElementById('canvasContainer');
       canvas.width = container.clientWidth;
       canvas.height = container.clientHeight;
+      updateSlidersRange();
       drawMap();
     }
     window.addEventListener('resize', resizeCanvas);
@@ -94,6 +106,7 @@
     const MIN_ZOOM = 0.3, MAX_ZOOM = 5;
     let spectating = false;
 
+    // UI
     const attackPanel = document.getElementById('attackPanel');
     const powerSlider = document.getElementById('powerSlider');
     const powerValue = document.getElementById('powerValue');
@@ -111,6 +124,12 @@
     const changeHashtagBtn = document.getElementById('changeHashtagBtn');
     let selectedTarget = null;
     let clickTarget = null;
+
+    // Ползунки
+    const hSlider = document.getElementById('hSlider');
+    const vSlider = document.getElementById('vSlider');
+    const vSliderContainer = document.getElementById('vSliderContainer');
+    const hSliderContainer = document.getElementById('hSliderContainer');
 
     document.addEventListener('gesturestart', e => e.preventDefault());
     document.addEventListener('gesturechange', e => e.preventDefault());
@@ -186,7 +205,47 @@
       };
     }
 
-    // ---------- УПРАВЛЕНИЕ КАМЕРОЙ (ПОЛНОСТЬЮ СВОБОДНОЕ) ----------
+    // ---------- ОБНОВЛЕНИЕ ПОЛЗУНКОВ ----------
+    function updateSlidersRange() {
+      const worldW = MAP_W * CELL_SIZE;
+      const worldH = MAP_H * CELL_SIZE;
+      const visibleW = canvas.width / zoom;
+      const visibleH = canvas.height / zoom;
+
+      hSlider.min = 0;
+      hSlider.max = Math.max(0, worldW);
+      vSlider.min = 0;
+      vSlider.max = Math.max(0, worldH);
+
+      // Значение ползунка = центр видимой области
+      hSlider.value = viewX + visibleW/2;
+      vSlider.value = viewY + visibleH/2;
+
+      // Показываем ползунки, только если игрок активен
+      if (currentPlayer.id && currentPlayer.hashtag) {
+        hSliderContainer.style.display = 'block';
+        vSliderContainer.style.display = 'block';
+      } else {
+        hSliderContainer.style.display = 'none';
+        vSliderContainer.style.display = 'none';
+      }
+    }
+
+    hSlider.addEventListener('input', () => {
+      const worldW = MAP_W * CELL_SIZE;
+      const visibleW = canvas.width / zoom;
+      viewX = Math.min(worldW - visibleW, Math.max(0, Number(hSlider.value) - visibleW/2));
+      drawMap();
+    });
+
+    vSlider.addEventListener('input', () => {
+      const worldH = MAP_H * CELL_SIZE;
+      const visibleH = canvas.height / zoom;
+      viewY = Math.min(worldH - visibleH, Math.max(0, Number(vSlider.value) - visibleH/2));
+      drawMap();
+    });
+
+    // ---------- УПРАВЛЕНИЕ КАМЕРОЙ (УЛУЧШЕННАЯ ЧУВСТВИТЕЛЬНОСТЬ) ----------
     const DRAG_THRESHOLD = 4;
     let isDragging = false, hasMoved = false;
     let dragStartX, dragStartY, dragStartViewX, dragStartViewY;
@@ -216,8 +275,15 @@
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / (rect.width || 1);
       const scaleY = canvas.height / (rect.height || 1);
-      viewX = dragStartViewX - (dx * scaleX) / zoom;
-      viewY = dragStartViewY - (dy * scaleY) / zoom;
+      // Увеличиваем чувствительность для малых масштабов (zoom < 1)
+      let speedX = (1 / zoom) * scaleX;
+      let speedY = (1 / zoom) * scaleY;
+      if (zoom < 1) {
+        speedX *= 1.5; // дополнительное ускорение
+        speedY *= 1.5;
+      }
+      viewX = dragStartViewX - dx * speedX;
+      viewY = dragStartViewY - dy * speedY;
       drawMap();
     });
 
@@ -241,6 +307,7 @@
         viewX = worldX * newZoom - mx;
         viewY = worldY * newZoom - my;
         zoom = newZoom;
+        updateSlidersRange();
         drawMap();
       }
     });
@@ -281,8 +348,14 @@
         const rect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / (rect.width || 1);
         const scaleY = canvas.height / (rect.height || 1);
-        viewX = dragStartViewX - (dx * scaleX) / zoom;
-        viewY = dragStartViewY - (dy * scaleY) / zoom;
+        let speedX = (1 / zoom) * scaleX;
+        let speedY = (1 / zoom) * scaleY;
+        if (zoom < 1) {
+          speedX *= 1.5;
+          speedY *= 1.5;
+        }
+        viewX = dragStartViewX - dx * speedX;
+        viewY = dragStartViewY - dy * speedY;
         drawMap();
       } else if (t.length === 2 && lastTouches) {
         const newDist = Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
@@ -299,6 +372,7 @@
         viewX = worldX * zoom - cx;
         viewY = worldY * zoom - cy;
         lastTouches = { dist: newDist, cx: lastTouches.cx, cy: lastTouches.cy, viewX, viewY, zoom };
+        updateSlidersRange();
         drawMap();
       }
     });
@@ -333,7 +407,7 @@
       clickTarget = null;
     });
 
-    // Двойной клик — центрирование на ближайшей своей клетке (удобная опция)
+    // Двойной клик — центрирование на ближайшей своей клетке
     canvas.addEventListener('dblclick', e => {
       if (!currentPlayer.id || !currentPlayer.hashtag) return;
       const rect = canvas.getBoundingClientRect();
@@ -347,6 +421,7 @@
       if (closest) {
         viewX = closest.worldX * zoom - canvas.width / 2;
         viewY = closest.worldY * zoom - canvas.height / 2;
+        updateSlidersRange();
         drawMap();
       }
     });
@@ -428,6 +503,7 @@
       else {
         if (isValidMap(data.map)) map = data.map;
         updateAdjacentSet();
+        updateSlidersRange();
         drawMap();
         updateInfo(`Лайков: ${currentPlayer.likes}`);
       }
@@ -595,6 +671,7 @@
         menuBtn.style.display = 'none';
       }
       updateLeaderboard();
+      updateSlidersRange(); // обновляем ползунки при каждой перерисовке
     }
 
     function updateLeaderboard() {
@@ -611,12 +688,12 @@
 
     function animateCapture(cells, serverMap) {
       if (!cells.length) {
-        map = serverMap; updateAdjacentSet(); drawMap(); updateInfo(`Лайков: ${currentPlayer.likes}`);
+        map = serverMap; updateAdjacentSet(); updateSlidersRange(); drawMap(); updateInfo(`Лайков: ${currentPlayer.likes}`);
         animating = false; return;
       }
       animating = true; animationQueue = [...cells]; map = serverMap;
       function step() {
-        if (!animationQueue.length) { animating = false; updateAdjacentSet(); drawMap(); updateInfo(`Лайков: ${currentPlayer.likes}`); return; }
+        if (!animationQueue.length) { animating = false; updateAdjacentSet(); updateSlidersRange(); drawMap(); updateInfo(`Лайков: ${currentPlayer.likes}`); return; }
         drawMap(); animationQueue.shift();
         animationTimer = setTimeout(step, 200);
       }
