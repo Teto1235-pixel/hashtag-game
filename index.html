@@ -110,7 +110,7 @@
     const menuCanChange = document.getElementById('menuCanChange');
     const changeHashtagBtn = document.getElementById('changeHashtagBtn');
     let selectedTarget = null;
-    let clickTarget = null; // цель, запомненная при mousedown
+    let clickTarget = null;
 
     document.addEventListener('gesturestart', e => e.preventDefault());
     document.addEventListener('gesturechange', e => e.preventDefault());
@@ -156,19 +156,16 @@
 
     function findClosestOwnCell(worldX, worldY) {
       if (!currentPlayer.id || !currentPlayer.hashtag) return null;
-      let bestCell = null;
-      let bestDist = Infinity;
+      let bestCell = null, bestDist = Infinity;
       for (let y=0; y<MAP_H; y++) {
         for (let x=0; x<MAP_W; x++) {
           if (map[y][x].ownerId === currentPlayer.id) {
-            const cellCenterX = x * CELL_SIZE + CELL_SIZE/2;
-            const cellCenterY = y * CELL_SIZE + CELL_SIZE/2;
-            const dx = cellCenterX - worldX;
-            const dy = cellCenterY - worldY;
-            const dist = Math.sqrt(dx*dx + dy*dy);
-            if (dist < bestDist) {
-              bestDist = dist;
-              bestCell = { x, y, worldX: cellCenterX, worldY: cellCenterY };
+            const cx = x * CELL_SIZE + CELL_SIZE/2;
+            const cy = y * CELL_SIZE + CELL_SIZE/2;
+            const d = Math.hypot(cx - worldX, cy - worldY);
+            if (d < bestDist) {
+              bestDist = d;
+              bestCell = { x, y, worldX: cx, worldY: cy };
             }
           }
         }
@@ -176,7 +173,6 @@
       return bestCell;
     }
 
-    // Конвертация экранных координат в игровые
     function screenToWorld(sx, sy) {
       const rect = canvas.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return { x: -1, y: -1 };
@@ -190,8 +186,8 @@
       };
     }
 
-    // ---------- УПРАВЛЕНИЕ КАМЕРОЙ (СВОБОДНОЕ) ----------
-    const DRAG_THRESHOLD = 4; // пикселей мёртвой зоны
+    // ---------- УПРАВЛЕНИЕ КАМЕРОЙ (ПОЛНОСТЬЮ СВОБОДНОЕ) ----------
+    const DRAG_THRESHOLD = 4;
     let isDragging = false, hasMoved = false;
     let dragStartX, dragStartY, dragStartViewX, dragStartViewY;
 
@@ -205,7 +201,6 @@
       dragStartViewY = viewY;
       canvas.style.cursor = 'grabbing';
 
-      // Запоминаем игровую клетку под курсором ДО любого движения
       const {x, y} = screenToWorld(e.clientX, e.clientY);
       clickTarget = (x >= 0 && x < MAP_W && y >= 0 && y < MAP_H) ? { x, y } : null;
       e.preventDefault();
@@ -223,7 +218,6 @@
       const scaleY = canvas.height / (rect.height || 1);
       viewX = dragStartViewX - (dx * scaleX) / zoom;
       viewY = dragStartViewY - (dy * scaleY) / zoom;
-      // Без ограничений – свободное перемещение
       drawMap();
     });
 
@@ -251,7 +245,7 @@
       }
     });
 
-    // Тач-управление (тоже с мёртвой зоной)
+    // Тач-управление (тоже свободное, без ограничений)
     let lastTouches = null;
     canvas.addEventListener('touchstart', e => {
       e.preventDefault();
@@ -313,7 +307,6 @@
       if (e.touches.length === 0) {
         isDragging = false;
         lastTouches = null;
-        // Если не было перетаскивания и есть цель — пытаемся атаковать
         if (!hasMoved && clickTarget && !animating && !spectating && currentPlayer.hashtag) {
           const {x, y} = clickTarget;
           if (adjacentSet.has(`${x},${y}`)) {
@@ -340,7 +333,7 @@
       clickTarget = null;
     });
 
-    // Двойной клик — центрироваться на ближайшей своей клетке (опционально)
+    // Двойной клик — центрирование на ближайшей своей клетке (удобная опция)
     canvas.addEventListener('dblclick', e => {
       if (!currentPlayer.id || !currentPlayer.hashtag) return;
       const rect = canvas.getBoundingClientRect();
@@ -562,7 +555,7 @@
       ctx.textAlign = 'start';
       ctx.restore();
 
-      // Указатель направления на свои клетки (внизу по центру)
+      // Указатель направления
       if (currentPlayer.id && currentPlayer.hashtag) {
         const arrowX = canvas.width / 2;
         const arrowY = canvas.height - 60;
