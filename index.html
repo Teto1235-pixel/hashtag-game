@@ -5,90 +5,63 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hashtag Territory</title>
   <style>
-    body {
-      margin: 0;
-      padding: 0;
-      background: #fff;
-      font-family: monospace;
-      overflow: hidden; /* чтобы не было скролла */
-    }
-    #info {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 10;
-      background: rgba(255,255,255,0.9);
-      padding: 4px 8px;
-      border-radius: 4px;
-    }
-    canvas {
-      display: block;
-    }
+    body { margin: 0; padding: 0; background: #fff; font-family: monospace; overflow: hidden; }
+    #info { position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(255,255,255,0.9); padding: 4px 8px; border-radius: 4px; }
+    #selection { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border: 1px solid #ccc; padding: 20px; z-index: 20; max-height: 80vh; overflow-y: auto; }
+    canvas { display: block; }
+    button { margin: 5px; padding: 8px 12px; cursor: pointer; font-family: monospace; }
   </style>
 </head>
 <body>
   <div id="info">Загрузка...</div>
+  <div id="selection">
+    <h3>Выберите хештег</h3>
+    <div id="hashtagList"></div>
+  </div>
   <canvas id="gameCanvas"></canvas>
 
-  <!-- VK Bridge -->
   <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
-
   <script>
     // ---------- НАСТРОЙКИ ----------
-    const CELL_SIZE = 20;      // пикселей на клетку
-    const MAP_W = 40;          // клеток по ширине
-    const MAP_H = 30;          // клеток по высоте
-    const SERVER_URL = 'https://here-vacation-mistress-region.trycloudflare.com';
+    const CELL_SIZE = 20;
+    const MAP_W = 400;
+    const MAP_H = 300;
+    const SERVER_URL = 'https://here-vacation-mistress-region.trycloudflare.com'; // ваш адрес
 
-    // ---------- ХОЛСТ ----------
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     canvas.width = MAP_W * CELL_SIZE;
     canvas.height = MAP_H * CELL_SIZE;
 
-    // ---------- ЗАГЛУШКА ИГРОКА ----------
+    // ---------- СОСТОЯНИЕ ИГРОКА ----------
     const currentPlayer = {
-      id: null,          // заполним после VK Bridge
-      likes: 20,
-      color: '#cccccc',  // серый, пока не получим с сервера
-      hashtag: ''
+      id: null,
+      likes: 0,
+      color: '#cccccc',
+      hashtag: null
     };
-
-    // ---------- КАРТА (изначально пустая) ----------
-    let map = Array(MAP_H).fill(null).map(() =>
-      Array(MAP_W).fill().map(() => ({ ownerId: null, hashtag: '' }))
-    );
+    let map = Array(MAP_H).fill(null).map(() => Array(MAP_W).fill().map(() => ({ ownerId: null, hashtag: '' })));
 
     // ---------- ОТРИСОВКА ----------
     function drawMap() {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // Рисуем клетки с владельцами
       for (let y = 0; y < MAP_H; y++) {
         for (let x = 0; x < MAP_W; x++) {
           const cell = map[y][x];
           const px = x * CELL_SIZE;
           const py = y * CELL_SIZE;
-
           if (cell.ownerId) {
-            // Если id игрока известен и совпадает – его цвет, иначе серый
             ctx.fillStyle = (currentPlayer.id && cell.ownerId === currentPlayer.id)
-              ? currentPlayer.color
-              : '#cccccc';
+              ? currentPlayer.color : '#cccccc';
             ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
-
-            // Белая рамка
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 1;
             ctx.strokeRect(px, py, CELL_SIZE, CELL_SIZE);
-
-            // Подпись хештега (первые 4 символа)
             ctx.fillStyle = '#000000';
             ctx.font = '8px monospace';
             ctx.fillText(cell.hashtag.substring(0, 4), px + 2, py + 10);
           } else {
-            // Пустая клетка – лёгкая сетка
             ctx.strokeStyle = '#e0e0e0';
             ctx.lineWidth = 0.5;
             ctx.strokeRect(px, py, CELL_SIZE, CELL_SIZE);
@@ -97,14 +70,96 @@
       }
     }
 
+    function updateInfo(text) {
+      document.getElementById('info').textContent = text;
+    }
+
+    // ---------- ОКНО ВЫБОРА ХЕШТЕГА ----------
+    function showHashtagSelection(hashtags) {
+      const listDiv = document.getElementById('hashtagList');
+      listDiv.innerHTML = '';
+      hashtags.forEach(tag => {
+        const btn = document.createElement('button');
+        btn.textContent = '#' + tag;
+        btn.onclick = () => claimHashtag(tag);
+        listDiv.appendChild(btn);
+      });
+      document.getElementById('selection').style.display = 'block';
+    }
+
+    function hideHashtagSelection() {
+      document.getElementById('selection').style.display = 'none';
+    }
+
+    // ---------- ЗАПРОСЫ К СЕРВЕРУ ----------
+    function claimHashtag(hashtag) {
+      fetch(`${SERVER_URL}/claim`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentPlayer.id, hashtag })
+      })
+      .then(r => r.json())
+      .then(res => {
+        if (res.success) {
+          currentPlayer.hashtag = res.player.hashtag;
+          currentPlayer.likes = res.player.likes;
+          map = res.map;
+          hideHashtagSelection();
+          drawMap();
+          updateInfo(`Хештег #${hashtag} выбран. Лайков: ${currentPlayer.likes}`);
+        } else {
+          alert(res.error);
+        }
+      });
+    }
+
+    function attackCell(gridX, gridY) {
+      fetch(`${SERVER_URL}/attack`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentPlayer.id, x: gridX, y: gridY, amount: 1 })
+      })
+      .then(r => r.json())
+      .then(res => {
+        if (res.success) {
+          map = res.map;
+          currentPlayer.likes = res.player.likes;
+          drawMap();
+          updateInfo(`Лайков: ${currentPlayer.likes}`);
+        } else {
+          updateInfo(`Ошибка: ${res.error}`);
+          if (res.map) map = res.map;
+          if (res.player) currentPlayer.likes = res.player.likes;
+          drawMap();
+        }
+      });
+    }
+
+    function fetchState() {
+      if (!currentPlayer.id) return;
+      fetch(`${SERVER_URL}/state`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentPlayer.id })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.player) {
+          currentPlayer.likes = data.player.likes;
+          if (currentPlayer.hashtag === null) currentPlayer.hashtag = data.player.hashtag;
+        }
+        if (data.map) map = data.map;
+        drawMap();
+        updateInfo(`Лайков: ${currentPlayer.likes}`);
+      });
+    }
+
     // ---------- ИНИЦИАЛИЗАЦИЯ ----------
     vkBridge.send('VKWebAppInit')
       .then(() => vkBridge.send('VKWebAppGetUserInfo'))
       .then(data => {
         currentPlayer.id = data.id;
-        document.getElementById('info').textContent = `Привет, ${data.first_name}!`;
-
-        // Присоединяемся к серверу
+        updateInfo(`Привет, ${data.first_name}!`);
         return fetch(`${SERVER_URL}/join`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -113,23 +168,27 @@
       })
       .then(r => r.json())
       .then(state => {
-        // Обновляем данные игрока с сервера
         currentPlayer.likes = state.player.likes;
         currentPlayer.color = state.player.color;
-        currentPlayer.hashtag = state.player.hashtag || '';
-        // Берём карту с сервера
+        currentPlayer.hashtag = state.player.hashtag;
         map = state.map;
         drawMap();
-        document.getElementById('info').textContent =
-          `Лайков: ${currentPlayer.likes}`;
+
+        if (!currentPlayer.hashtag && state.availableHashtags) {
+          // Игрок ещё не выбрал хештег — показываем окно выбора
+          showHashtagSelection(state.availableHashtags);
+        } else {
+          updateInfo(`Лайков: ${currentPlayer.likes}`);
+        }
       })
       .catch(error => {
-        document.getElementById('info').textContent = 'Ошибка: ' + error;
+        updateInfo('Ошибка: ' + error);
         console.error(error);
       });
 
     // ---------- ОБРАБОТКА КЛИКОВ ----------
     canvas.addEventListener('click', (e) => {
+      if (!currentPlayer.hashtag) return; // не атакуем, пока нет хештега
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / rect.width;
       const scaleY = canvas.height / rect.height;
@@ -137,43 +196,12 @@
       const mouseY = (e.clientY - rect.top) * scaleY;
       const gridX = Math.floor(mouseX / CELL_SIZE);
       const gridY = Math.floor(mouseY / CELL_SIZE);
-
       if (gridX < 0 || gridX >= MAP_W || gridY < 0 || gridY >= MAP_H) return;
-
-      // Пока атакуем с фиксированной силой 1 (позже добавим бегунок)
-      fetch(`${SERVER_URL}/attack`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: currentPlayer.id,
-          x: gridX,
-          y: gridY,
-          amount: 1
-        })
-      })
-      .then(r => r.json())
-      .then(res => {
-        if (res.success) {
-          map = res.map;
-          currentPlayer.likes = res.player.likes;
-          drawMap();
-          document.getElementById('info').textContent =
-            `Лайков: ${currentPlayer.likes}`;
-        } else {
-          // Показываем ошибку (например, «недостаточно лайков»)
-          document.getElementById('info').textContent =
-            `Ошибка: ${res.error}`;
-          // Если сервер вернул обновлённые данные, применяем их
-          if (res.map) map = res.map;
-          if (res.player) currentPlayer.likes = res.player.likes;
-          drawMap();
-        }
-      })
-      .catch(err => {
-        console.error(err);
-        document.getElementById('info').textContent = 'Нет связи с сервером';
-      });
+      attackCell(gridX, gridY);
     });
+
+    // ---------- ПЕРИОДИЧЕСКОЕ ОБНОВЛЕНИЕ ЛАЙКОВ ----------
+    setInterval(fetchState, 10_000); // каждые 10 секунд
   </script>
 </body>
 </html>
