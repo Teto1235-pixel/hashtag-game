@@ -59,7 +59,8 @@
   <script>
     // ---------- НАСТРОЙКИ ----------
     const CELL_SIZE = 8;
-    let MAP_W = 200, MAP_H = 200;
+    let MAP_W = 320;   // 16:9
+    let MAP_H = 180;
     const SERVER_URL = 'https://here-vacation-mistress-region.trycloudflare.com'; // замените
 
     const canvas = document.getElementById('gameCanvas');
@@ -69,7 +70,7 @@
       const container = document.getElementById('canvasContainer');
       canvas.width = container.clientWidth;
       canvas.height = container.clientHeight;
-      clampCamera();
+      clampView();
       drawMap();
     }
     window.addEventListener('resize', resizeCanvas);
@@ -85,7 +86,7 @@
     let animating = false, animationQueue = [], animationTimer = null;
     let viewX = 0, viewY = 0, zoom = 1;
     const MIN_ZOOM = 0.3, MAX_ZOOM = 5;
-    let spectating = false; // режим наблюдателя
+    let spectating = false;
 
     // UI
     const attackPanel = document.getElementById('attackPanel');
@@ -105,15 +106,29 @@
     document.addEventListener('gesturechange', e => e.preventDefault());
     document.addEventListener('gestureend', e => e.preventDefault());
 
-    // ---------- КАМЕРА (можно край в центр) ----------
-    function clampCamera() {
+    // ---------- КАМЕРА (границы без дёрганья) ----------
+    function clampView() {
       const worldW = MAP_W * CELL_SIZE;
       const worldH = MAP_H * CELL_SIZE;
       const visibleW = canvas.width / zoom;
       const visibleH = canvas.height / zoom;
-      // границы: разрешаем выходить за пределы на половину экрана, чтобы край был в центре
-      viewX = Math.max(-visibleW/2, Math.min(viewX, worldW - visibleW/2));
-      viewY = Math.max(-visibleH/2, Math.min(viewY, worldH - visibleH/2));
+      // Разрешаем небольшой выход за края, чтобы можно было подвести край к центру
+      const padX = visibleW * 0.3;
+      const padY = visibleH * 0.3;
+      viewX = Math.max(-padX, Math.min(viewX, worldW - visibleW + padX));
+      viewY = Math.max(-padY, Math.min(viewY, worldH - visibleH + padY));
+    }
+
+    // Применяется только после перетаскивания, но не при зуме
+    function applyDragConstraints() {
+      const worldW = MAP_W * CELL_SIZE;
+      const worldH = MAP_H * CELL_SIZE;
+      const visibleW = canvas.width / zoom;
+      const visibleH = canvas.height / zoom;
+      if (viewX < -visibleW * 0.3) viewX = -visibleW * 0.3;
+      if (viewY < -visibleH * 0.3) viewY = -visibleH * 0.3;
+      if (viewX > worldW - visibleW * 0.7) viewX = worldW - visibleW * 0.7;
+      if (viewY > worldH - visibleH * 0.7) viewY = worldH - visibleH * 0.7;
     }
 
     function isValidMap(m) {
@@ -192,7 +207,7 @@
         });
       }
 
-      // Надписи для всех владельцев территорий (кроме пустых)
+      // Надписи для всех владельцев территорий
       const drawnOwners = new Set();
       for (let y=0; y<MAP_H; y++) {
         for (let x=0; x<MAP_W; x++) {
@@ -211,7 +226,6 @@
           ctx.font = `bold ${fontSize}px "Courier New", monospace`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          // Хештег крупно, под ним количество клеток помельче
           ctx.fillText(info.hashtag || '?', centerX, centerY - fontSize*0.2);
           ctx.font = `${fontSize*0.6}px "Courier New", monospace`;
           ctx.fillText(`${bounds.count}`, centerX, centerY + fontSize*0.6);
@@ -260,12 +274,11 @@
       step();
     }
 
-    // Центрирование
+    // Центрирование на своих клетках (без скачков)
     function centerOnMyCells() {
       if (!currentPlayer.hashtag) return;
       const bounds = getTerritoryBounds(currentPlayer.id);
       if (bounds.count === 0) return;
-      const worldW = MAP_W*CELL_SIZE, worldH = MAP_H*CELL_SIZE;
       const visibleW = canvas.width, visibleH = canvas.height;
       const territoryW = bounds.width*CELL_SIZE, territoryH = bounds.height*CELL_SIZE;
       const fitZoom = Math.min(visibleW/territoryW, visibleH/territoryH, MAX_ZOOM) * 0.9;
@@ -274,7 +287,7 @@
       const centerY = (bounds.minY+bounds.maxY)/2*CELL_SIZE + CELL_SIZE/2;
       viewX = centerX - canvas.width/(2*zoom);
       viewY = centerY - canvas.height/(2*zoom);
-      clampCamera();
+      // Без clampView, потому что гарантированно в границах
       drawMap();
     }
     homeBtn.addEventListener('click', centerOnMyCells);
@@ -289,7 +302,7 @@
       };
     }
 
-    // Drag/Zoom
+    // Drag без рывков
     let isDragging = false, dragStartX, dragStartY, dragStartViewX, dragStartViewY;
     canvas.addEventListener('mousedown', e => {
       if (e.button === 0 && !e.ctrlKey) {
@@ -302,9 +315,12 @@
       if (!isDragging) return;
       viewX = dragStartViewX - (e.clientX - dragStartX)/zoom;
       viewY = dragStartViewY - (e.clientY - dragStartY)/zoom;
-      clampCamera(); drawMap();
+      applyDragConstraints();
+      drawMap();
     });
     window.addEventListener('mouseup', () => { isDragging = false; canvas.style.cursor = 'default'; });
+
+    // Зум без ограничений (плавный)
     canvas.addEventListener('wheel', e => {
       e.preventDefault();
       const rect = canvas.getBoundingClientRect();
@@ -314,9 +330,12 @@
       const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * (e.deltaY>0?0.9:1.1)));
       if (newZoom !== zoom) {
         viewX = worldX*newZoom - mx; viewY = worldY*newZoom - my;
-        zoom = newZoom; clampCamera(); drawMap();
+        zoom = newZoom;
+        // Без clampView! Иначе сдвинет и вызовет прыжок
+        drawMap();
       }
     });
+
     // Touch
     let lastTouches = null;
     canvas.addEventListener('touchstart', e => {
@@ -329,7 +348,8 @@
       if (t.length===1 && isDragging) {
         viewX = dragStartViewX - (t[0].clientX - dragStartX)/zoom;
         viewY = dragStartViewY - (t[0].clientY - dragStartY)/zoom;
-        clampCamera(); drawMap();
+        applyDragConstraints();
+        drawMap();
       } else if (t.length===2 && lastTouches) {
         const newDist = Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
         const scale = newDist / lastTouches.dist;
@@ -340,7 +360,7 @@
         const worldX = (cx + lastTouches.viewX)/lastTouches.zoom, worldY = (cy + lastTouches.viewY)/lastTouches.zoom;
         zoom = newZoom; viewX = worldX*zoom - cx; viewY = worldY*zoom - cy;
         lastTouches = { dist:newDist, cx:lastTouches.cx, cy:lastTouches.cy, viewX, viewY, zoom };
-        clampCamera(); drawMap();
+        drawMap();
       }
     });
     canvas.addEventListener('touchend', e => { if (e.touches.length===0) { isDragging=false; lastTouches=null; } });
@@ -380,9 +400,7 @@
       if (data.worldW) MAP_W = data.worldW; if (data.worldH) MAP_H = data.worldH;
       if (data.leaderboard) leaderboard = data.leaderboard;
 
-      // Проверка на поражение текущего игрока (если у него больше нет клеток, но есть хештег)
       if (currentPlayer.hashtag && data.defeatedPlayerId === currentPlayer.id) {
-        // игрок проиграл
         currentPlayer.hashtag = null;
         spectating = true;
         gameoverDiv.style.display = 'flex';
@@ -436,7 +454,6 @@
       });
     }
 
-    // Выбор хештега: занятые красным, кнопка наблюдателя
     function showSelection(hashtags, takenHashtags) {
       const listDiv = document.getElementById('hashtagList');
       listDiv.innerHTML = '';
@@ -458,7 +475,6 @@
 
     function hideSelection() { selectionDiv.style.display = 'none'; }
 
-    // Game over экран
     document.getElementById('gameoverSpectate').addEventListener('click', spectate);
 
     // ---------- ИНИЦИАЛИЗАЦИЯ ----------
@@ -476,9 +492,7 @@
         MAP_W = state.worldW || MAP_W; MAP_H = state.worldH || MAP_H;
         leaderboard = state.leaderboard || [];
         applyServerResponse(state, null);
-        // Показываем выбор, если нет хештега и не зритель
         if (!currentPlayer.hashtag && !spectating) {
-          // Собираем занятые хештеги
           const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
           showSelection(AVAILABLE_HASHTAGS || [], taken);
         }
@@ -491,7 +505,6 @@
     resizeCanvas();
     drawMap();
 
-    // Список доступных хештегов (нужен на клиенте для отображения)
     const AVAILABLE_HASHTAGS = [
       'Azur_lane', 'Girls_Frontline', 'Arknights', 'Fate',
       'Genshin_Impact', 'Hololive', 'Blue_Archive', 'Uma_Musume',
