@@ -25,11 +25,46 @@
     button { margin:5px; padding:8px 12px; cursor:pointer; font-family:'Courier New',monospace; }
     input[type=range] { width:200px; }
 
-    /* Ползунки */
-    #vSliderContainer { position:absolute; left:10px; top:50%; transform:translateY(-50%); z-index:15; display:none; }
-    #vSlider { writing-mode:bt-lr; -webkit-appearance:slider-vertical; width:20px; height:200px; }
-    #hSliderContainer { position:absolute; bottom:10px; left:50%; transform:translateX(-50%); z-index:15; display:none; }
-    #hSlider { width:300px; }
+       /* Улучшенные ползунки */
+    #vSliderContainer {
+      position:absolute;
+      left:15px;
+      top:50%;
+      transform:translateY(-50%);
+      z-index:15;
+      display:none;
+      width:50px;
+      height:200px;
+    }
+    #vSlider {
+      -webkit-appearance: slider-vertical; /* для Chrome */
+      appearance: slider-vertical;
+      writing-mode: bt-lr;                /* для Firefox */
+      width:100%;
+      height:100%;
+      margin:0;
+      cursor:pointer;
+      background:rgba(255,255,255,0.7);
+      border-radius:10px;
+    }
+    #hSliderContainer {
+      position:absolute;
+      bottom:15px;
+      left:50%;
+      transform:translateX(-50%);
+      z-index:15;
+      display:none;
+      width:400px;
+      height:40px;
+    }
+    #hSlider {
+      width:100%;
+      height:100%;
+      margin:0;
+      cursor:pointer;
+      background:rgba(255,255,255,0.7);
+      border-radius:10px;
+    }
   </style>
 </head>
 <body>
@@ -205,7 +240,7 @@
       };
     }
 
-    // ---------- ОБНОВЛЕНИЕ ПОЛЗУНКОВ ----------
+      // ---------- ОБНОВЛЕНИЕ ПОЛЗУНКОВ ----------
     function updateSlidersRange() {
       const worldW = MAP_W * CELL_SIZE;
       const worldH = MAP_H * CELL_SIZE;
@@ -213,15 +248,14 @@
       const visibleH = canvas.height / zoom;
 
       hSlider.min = 0;
-      hSlider.max = Math.max(0, worldW);
+      hSlider.max = Math.max(0, worldW - visibleW);
       vSlider.min = 0;
-      vSlider.max = Math.max(0, worldH);
+      vSlider.max = Math.max(0, worldH - visibleH);
 
-      // Значение ползунка = центр видимой области
-      hSlider.value = viewX + visibleW/2;
-      vSlider.value = viewY + visibleH/2;
+      // Значения соответствуют viewX / viewY
+      hSlider.value = viewX;
+      vSlider.value = viewY;
 
-      // Показываем ползунки, только если игрок активен
       if (currentPlayer.id && currentPlayer.hashtag) {
         hSliderContainer.style.display = 'block';
         vSliderContainer.style.display = 'block';
@@ -232,18 +266,18 @@
     }
 
     hSlider.addEventListener('input', () => {
-      const worldW = MAP_W * CELL_SIZE;
-      const visibleW = canvas.width / zoom;
-      viewX = Math.min(worldW - visibleW, Math.max(0, Number(hSlider.value) - visibleW/2));
+      viewX = Number(hSlider.value);
       drawMap();
     });
 
     vSlider.addEventListener('input', () => {
-      const worldH = MAP_H * CELL_SIZE;
-      const visibleH = canvas.height / zoom;
-      viewY = Math.min(worldH - visibleH, Math.max(0, Number(vSlider.value) - visibleH/2));
+      viewY = Number(vSlider.value);
       drawMap();
     });
+
+    // Предотвращаем перетаскивание карты при клике на ползунок
+    hSlider.addEventListener('mousedown', e => e.stopPropagation());
+    vSlider.addEventListener('mousedown', e => e.stopPropagation());
 
     // ---------- УПРАВЛЕНИЕ КАМЕРОЙ (УЛУЧШЕННАЯ ЧУВСТВИТЕЛЬНОСТЬ) ----------
     const DRAG_THRESHOLD = 4;
