@@ -5,12 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>Hashtag Territory</title>
   <style>
-    body { margin: 0; padding: 0; background: #ffffff; font-family: monospace; overflow: hidden; touch-action: manipulation; }
-    #canvasContainer { width: 100%; height: 100vh; display: flex; justify-content: center; align-items: center; background: #ffffff; }
-    canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    body { margin: 0; padding: 0; background: #222; font-family: monospace; overflow: hidden; touch-action: manipulation; }
+    #canvasContainer { width: 100%; height: 100vh; display: flex; justify-content: center; align-items: center; }
+    canvas { display: block; max-width: 100%; max-height: 100%; touch-action: none; }
     #info { position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(255,255,255,0.9); padding: 4px 8px; border-radius: 4px; }
     #legend { position: absolute; bottom: 20px; left: 20px; z-index: 10; background: rgba(255,255,255,0.9); padding: 8px 12px; border-radius: 8px; display: none; align-items: center; gap: 8px; }
     #legendColor { width: 20px; height: 20px; border: 1px solid #333; }
+    #homeBtn { position: absolute; bottom: 20px; right: 20px; z-index: 10; background: rgba(255,255,255,0.9); border: 1px solid #ccc; padding: 8px 12px; border-radius: 8px; font-size: 16px; cursor: pointer; display: none; }
     #selection { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border: 1px solid #ccc; padding: 20px; z-index: 20; max-height: 80vh; overflow-y: auto; }
     #attackPanel { display: none; position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: white; border: 1px solid #ccc; padding: 15px; z-index: 20; text-align: center; }
     button { margin: 5px; padding: 8px 12px; cursor: pointer; font-family: monospace; }
@@ -23,6 +24,7 @@
     <div id="legendColor"></div>
     <span id="legendHashtag"></span>
   </div>
+  <button id="homeBtn" title="Мои владения">🏠 Мои клетки</button>
   <div id="selection">
     <h3>Выберите хештег</h3>
     <div id="hashtagList"></div>
@@ -43,21 +45,34 @@
   <script>
     // ---------- НАСТРОЙКИ ----------
     const CELL_SIZE = 6;
-    const MAP_W = 100;
-    const MAP_H = 100;
-    const SERVER_URL = 'https://here-vacation-mistress-region.trycloudflare.com'; // ⚠️ замените на свой
+    let MAP_W = 200;   // будет обновляться с сервера
+    let MAP_H = 200;
+    const SERVER_URL = 'https://here-vacation-mistress-region.trycloudflare.com'; // ваш адрес
 
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-    canvas.width = MAP_W * CELL_SIZE;
-    canvas.height = MAP_H * CELL_SIZE;
+
+    // Размеры канваса (будут подстраиваться)
+    function resizeCanvas() {
+      const container = document.getElementById('canvasContainer');
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      if (w === 0 || h === 0) return;
+      canvas.width = w;
+      canvas.height = h;
+      clampCamera();
+      drawMap();
+    }
+    window.addEventListener('resize', resizeCanvas);
 
     // ---------- СОСТОЯНИЕ ИГРЫ ----------
     const currentPlayer = {
       id: null,
       likes: 0,
       color: '#cccccc',
-      hashtag: null
+      hashtag: null,
+      spawnX: 0,
+      spawnY: 0
     };
     let map = Array(MAP_H).fill(null).map(() => Array(MAP_W).fill().map(() => ({ ownerId: null, hashtag: '' })));
     let playersInfo = {};
@@ -67,11 +82,10 @@
     let animating = false;
     let animationQueue = [];
     let animationTimer = null;
-    const ANIMATION_DELAY = 200; // мс между клетками, можно менять
 
     // Камера
     let viewX = 0, viewY = 0, zoom = 1;
-    let MIN_ZOOM = 0.5, MAX_ZOOM = 5;
+    const MIN_ZOOM = 0.5, MAX_ZOOM = 5;
 
     // UI
     const attackPanel = document.getElementById('attackPanel');
@@ -81,6 +95,7 @@
     const legend = document.getElementById('legend');
     const legendColor = document.getElementById('legendColor');
     const legendHashtag = document.getElementById('legendHashtag');
+    const homeBtn = document.getElementById('homeBtn');
     let selectedTarget = null;
 
     // ---------- БЛОКИРОВКА СИСТЕМНОГО ЗУМА ----------
@@ -88,7 +103,20 @@
     document.addEventListener('gesturechange', (e) => e.preventDefault());
     document.addEventListener('gestureend', (e) => e.preventDefault());
 
-    // ---------- ПРОВЕРКА КАРТЫ ----------
+    // ---------- ОГРАНИЧЕНИЯ КАМЕРЫ ----------
+    function clampCamera() {
+      const canvasW = canvas.width || 1;
+      const canvasH = canvas.height || 1;
+      const worldW = MAP_W * CELL_SIZE;
+      const worldH = MAP_H * CELL_SIZE;
+      const visibleW = canvasW / zoom;
+      const visibleH = canvasH / zoom;
+      const maxViewX = Math.max(0, worldW - visibleW);
+      const maxViewY = Math.max(0, worldH - visibleH);
+      viewX = Math.max(0, Math.min(viewX, maxViewX));
+      viewY = Math.max(0, Math.min(viewY, maxViewY));
+    }
+
     function isValidMap(m) {
       return Array.isArray(m) && m.length === MAP_H && m[0] && m[0].length === MAP_W;
     }
@@ -116,7 +144,6 @@
     // ---------- ОТРИСОВКА ----------
     function drawMap() {
       if (!isValidMap(map)) return;
-
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.save();
       ctx.translate(-viewX, -viewY);
@@ -168,13 +195,15 @@
 
       ctx.restore();
 
-      // Легенда
+      // Легенда и кнопка
       if (currentPlayer.id && currentPlayer.hashtag) {
         legend.style.display = 'flex';
         legendColor.style.backgroundColor = currentPlayer.color;
         legendHashtag.textContent = '#' + currentPlayer.hashtag;
+        homeBtn.style.display = 'block';
       } else {
         legend.style.display = 'none';
+        homeBtn.style.display = 'none';
       }
     }
 
@@ -182,7 +211,7 @@
       document.getElementById('info').textContent = text;
     }
 
-    // ---------- АНИМАЦИЯ ЗАХВАТА (замедленная) ----------
+    // ---------- АНИМАЦИЯ ЗАХВАТА (медленная) ----------
     function animateCapture(capturedCells, serverMap) {
       if (capturedCells.length === 0) {
         map = serverMap;
@@ -192,7 +221,6 @@
         animating = false;
         return;
       }
-
       animating = true;
       animationQueue = [...capturedCells];
       map = serverMap;
@@ -207,11 +235,44 @@
         }
         drawMap();
         animationQueue.shift();
-        animationTimer = setTimeout(step, ANIMATION_DELAY);
+        animationTimer = setTimeout(step, 200); // медленно
       }
-
       step();
     }
+
+    // ---------- ЦЕНТРИРОВАНИЕ КАМЕРЫ ----------
+    function centerOn(worldX, worldY) {
+      const canvasW = canvas.width || 1;
+      const canvasH = canvas.height || 1;
+      const targetWorldX = worldX * CELL_SIZE + CELL_SIZE/2;
+      const targetWorldY = worldY * CELL_SIZE + CELL_SIZE/2;
+      viewX = targetWorldX - canvasW / (2 * zoom);
+      viewY = targetWorldY - canvasH / (2 * zoom);
+      clampCamera();
+      drawMap();
+    }
+
+    function centerOnMyCells() {
+      // Находим все свои клетки и центр масс
+      let sumX = 0, sumY = 0, count = 0;
+      for (let y = 0; y < MAP_H; y++) {
+        for (let x = 0; x < MAP_W; x++) {
+          if (map[y][x].ownerId === currentPlayer.id) {
+            sumX += x;
+            sumY += y;
+            count++;
+          }
+        }
+      }
+      if (count === 0) {
+        // если нет клеток, центрируемся на точку спауна
+        centerOn(currentPlayer.spawnX, currentPlayer.spawnY);
+      } else {
+        centerOn(Math.floor(sumX / count), Math.floor(sumY / count));
+      }
+    }
+
+    homeBtn.addEventListener('click', centerOnMyCells);
 
     // ---------- КОНВЕРТАЦИЯ КООРДИНАТ ----------
     function screenToWorld(screenX, screenY) {
@@ -225,32 +286,7 @@
       return { x: Math.floor(worldX / CELL_SIZE), y: Math.floor(worldY / CELL_SIZE) };
     }
 
-    // ---------- АВТОПОДГОНКА И ОГРАНИЧЕНИЯ КАМЕРЫ ----------
-    function fitWorld() {
-      const containerW = canvas.clientWidth;
-      const containerH = canvas.clientHeight;
-      const worldW = MAP_W * CELL_SIZE;
-      const worldH = MAP_H * CELL_SIZE;
-      const fitZoom = Math.min(containerW / worldW, containerH / worldH);
-      MIN_ZOOM = Math.max(0.2, fitZoom); // не мельче, чем полный обзор, но минимум 0.2
-      if (zoom < MIN_ZOOM) zoom = MIN_ZOOM;
-      if (zoom > MAX_ZOOM) zoom = MAX_ZOOM;
-    }
-
-    function clampCamera() {
-      const canvasDisplayWidth = canvas.clientWidth;
-      const canvasDisplayHeight = canvas.clientHeight;
-      const worldW = MAP_W * CELL_SIZE;
-      const worldH = MAP_H * CELL_SIZE;
-      const visibleW = canvasDisplayWidth / zoom;
-      const visibleH = canvasDisplayHeight / zoom;
-      const maxViewX = Math.max(0, worldW - visibleW);
-      const maxViewY = Math.max(0, worldH - visibleH);
-      viewX = Math.max(0, Math.min(viewX, maxViewX));
-      viewY = Math.max(0, Math.min(viewY, maxViewY));
-    }
-
-    // ---------- УПРАВЛЕНИЕ КАМЕРОЙ (с ограничениями) ----------
+    // ---------- УПРАВЛЕНИЕ КАМЕРОЙ ----------
     let isDragging = false, dragStartX, dragStartY, dragStartViewX, dragStartViewY;
 
     canvas.addEventListener('mousedown', (e) => {
@@ -284,7 +320,6 @@
 
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
-      fitWorld(); // обновляем MIN_ZOOM под текущий размер окна
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / rect.width;
       const scaleY = canvas.height / rect.height;
@@ -336,7 +371,6 @@
         clampCamera();
         drawMap();
       } else if (touches.length === 2 && lastTouches) {
-        fitWorld();
         const newDist = Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
         const scale = newDist / lastTouches.dist;
         const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, lastTouches.zoom * scale));
@@ -416,8 +450,14 @@
       if (data.player) {
         currentPlayer.likes = data.player.likes;
         if (currentPlayer.hashtag === null) currentPlayer.hashtag = data.player.hashtag;
+        if (data.player.spawnX !== undefined) {
+          currentPlayer.spawnX = data.player.spawnX;
+          currentPlayer.spawnY = data.player.spawnY;
+        }
       }
       if (data.playersInfo) playersInfo = data.playersInfo;
+      if (data.worldW) MAP_W = data.worldW;
+      if (data.worldH) MAP_H = data.worldH;
 
       if (capturedCells && capturedCells.length > 0) {
         animateCapture(capturedCells, data.map);
@@ -439,8 +479,12 @@
       .then(res => {
         if (res.success) {
           currentPlayer.color = res.player.color;
+          currentPlayer.spawnX = res.player.spawnX;
+          currentPlayer.spawnY = res.player.spawnY;
           applyServerResponse(res, null);
           hideHashtagSelection();
+          // Центрируемся на точку спауна
+          centerOn(currentPlayer.spawnX, currentPlayer.spawnY);
         } else {
           alert(res.error);
         }
@@ -492,17 +536,6 @@
     }
 
     // ---------- ИНИЦИАЛИЗАЦИЯ ----------
-    function centerCamera() {
-      fitWorld();
-      const canvasW = canvas.clientWidth;
-      const canvasH = canvas.clientHeight;
-      const worldW = MAP_W * CELL_SIZE;
-      const worldH = MAP_H * CELL_SIZE;
-      viewX = (worldW - canvasW / zoom) / 2;
-      viewY = (worldH - canvasH / zoom) / 2;
-      clampCamera();
-    }
-
     vkBridge.send('VKWebAppInit')
       .then(() => vkBridge.send('VKWebAppGetUserInfo'))
       .then(data => {
@@ -517,26 +550,23 @@
       .then(r => r.json())
       .then(state => {
         currentPlayer.color = state.player.color;
-        centerCamera(); // подгоняем зум и центрируем
+        currentPlayer.spawnX = state.player.spawnX;
+        currentPlayer.spawnY = state.player.spawnY;
+        MAP_W = state.worldW || MAP_W;
+        MAP_H = state.worldH || MAP_H;
         applyServerResponse(state, null);
         if (!currentPlayer.hashtag && state.availableHashtags) {
           showHashtagSelection(state.availableHashtags);
         }
+        resizeCanvas(); // подгоняем размер и центрируем
       })
       .catch(error => {
         updateInfo('Ошибка: ' + error);
         console.error(error);
       });
 
-    // При ресайзе окна пересчитываем минимальный зум и поправляем камеру
-    window.addEventListener('resize', () => {
-      fitWorld();
-      if (zoom < MIN_ZOOM) zoom = MIN_ZOOM;
-      clampCamera();
-      drawMap();
-    });
-
     setInterval(fetchState, 10_000);
+    resizeCanvas();
     drawMap();
   </script>
 </body>
