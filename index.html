@@ -11,8 +11,7 @@
     #info { position:absolute; top:10px; left:10px; z-index:10; background:rgba(255,255,255,0.9); padding:4px 8px; border-radius:4px; }
     #legend { position:absolute; bottom:20px; left:20px; z-index:10; background:rgba(255,255,255,0.9); padding:8px 12px; border-radius:8px; display:none; align-items:center; gap:8px; }
     #legendColor { width:20px; height:20px; border:1px solid #333; }
-    #bottomRightButtons { position:absolute; bottom:20px; right:20px; z-index:10; display:none; gap:8px; }
-    #homeBtn, #menuBtn { background:rgba(255,255,255,0.9); border:1px solid #ccc; padding:8px 12px; border-radius:8px; font-size:16px; cursor:pointer; }
+    #menuBtn { position:absolute; bottom:20px; right:20px; z-index:10; background:rgba(255,255,255,0.9); border:1px solid #ccc; padding:8px 12px; border-radius:8px; font-size:16px; cursor:pointer; display:none; }
     #leaderboard { position:absolute; top:10px; right:10px; z-index:10; background:rgba(0,0,0,0.5); color:white; padding:8px 12px; border-radius:8px; max-width:200px; font-size:12px; display:none; }
     .leader-item { display:flex; align-items:center; margin-bottom:4px; }
     .leader-color { width:10px; height:10px; margin-right:5px; border:1px solid #fff; }
@@ -33,10 +32,7 @@
     <div id="legendColor"></div>
     <span id="legendHashtag"></span>
   </div>
-  <div id="bottomRightButtons">
-    <button id="homeBtn" title="Мои владения">🏠 Мои клетки</button>
-    <button id="menuBtn" title="Меню">⚙️</button>
-  </div>
+  <button id="menuBtn" title="Меню">⚙️</button>
   <div id="leaderboard"></div>
   <div id="menuPanel">
     <p>Вы играете за: <strong><span id="menuHashtag"></span></strong></p>
@@ -70,7 +66,7 @@
   <script>
     // ---------- НАСТРОЙКИ ----------
     const CELL_SIZE = 8;
-    let MAP_W = 320;   // 16:9
+    let MAP_W = 320;
     let MAP_H = 180;
     const SERVER_URL = 'https://here-vacation-mistress-region.trycloudflare.com'; // замените
 
@@ -106,7 +102,6 @@
     const legend = document.getElementById('legend');
     const legendColor = document.getElementById('legendColor');
     const legendHashtag = document.getElementById('legendHashtag');
-    const homeBtn = document.getElementById('homeBtn');
     const leaderboardDiv = document.getElementById('leaderboard');
     const selectionDiv = document.getElementById('selection');
     const gameoverDiv = document.getElementById('gameover');
@@ -115,7 +110,6 @@
     const menuHashtag = document.getElementById('menuHashtag');
     const menuCanChange = document.getElementById('menuCanChange');
     const changeHashtagBtn = document.getElementById('changeHashtagBtn');
-    const bottomRightButtons = document.getElementById('bottomRightButtons');
     let selectedTarget = null;
 
     document.addEventListener('gesturestart', e => e.preventDefault());
@@ -123,16 +117,12 @@
     document.addEventListener('gestureend', e => e.preventDefault());
     canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-    // ---------- ГИБКИЕ ГРАНИЦЫ КАМЕРЫ (можно подвести край к центру) ----------
+    // ---------- ГРАНИЦЫ КАМЕРЫ (можно подвести край к центру) ----------
     function clampCamera() {
       const worldW = MAP_W * CELL_SIZE;
       const worldH = MAP_H * CELL_SIZE;
       const visibleW = canvas.width / zoom;
       const visibleH = canvas.height / zoom;
-
-      // Разрешаем сдвигать так, чтобы любой край мог оказаться в центре экрана
-      // Минимальный view = -visibleW/2 (т.е. левый край мира в центре)
-      // Максимальный view = worldW - visibleW/2 (правый край мира в центре)
       viewX = Math.max(-visibleW / 2, Math.min(viewX, worldW - visibleW / 2));
       viewY = Math.max(-visibleH / 2, Math.min(viewY, worldH - visibleH / 2));
     }
@@ -171,6 +161,98 @@
         }
       }
       return { minX, minY, maxX, maxY, count, width: maxX-minX+1, height: maxY-minY+1 };
+    }
+
+    // Поиск ближайшей к заданной мировой точке клетки игрока
+    function findClosestOwnCell(worldX, worldY) {
+      if (!currentPlayer.id || !currentPlayer.hashtag) return null;
+      let bestCell = null;
+      let bestDist = Infinity;
+      for (let y=0; y<MAP_H; y++) {
+        for (let x=0; x<MAP_W; x++) {
+          if (map[y][x].ownerId === currentPlayer.id) {
+            const cellCenterX = x * CELL_SIZE + CELL_SIZE/2;
+            const cellCenterY = y * CELL_SIZE + CELL_SIZE/2;
+            const dx = cellCenterX - worldX;
+            const dy = cellCenterY - worldY;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist < bestDist) {
+              bestDist = dist;
+              bestCell = { x, y, worldX: cellCenterX, worldY: cellCenterY };
+            }
+          }
+        }
+      }
+      return bestCell;
+    }
+
+    // Рисуем стрелку-указатель к ближайшей своей клетке, если центр экрана вне территории
+    function drawDirectionIndicator() {
+      if (!currentPlayer.hashtag || !currentPlayer.id) return;
+      // Центр экрана в мировых координатах
+      const screenCenterX = canvas.width / 2;
+      const screenCenterY = canvas.height / 2;
+      const centerWorldX = (screenCenterX + viewX) / zoom;
+      const centerWorldY = (screenCenterY + viewY) / zoom;
+
+      const closest = findClosestOwnCell(centerWorldX, centerWorldY);
+      if (!closest) return;
+
+      // Проверяем, находится ли центр экрана внутри своей территории (очень близко к своей клетке)
+      const cellSize = CELL_SIZE;
+      const cellCenterX = closest.worldX;
+      const cellCenterY = closest.worldY;
+      const distToCenter = Math.hypot(cellCenterX - centerWorldX, cellCenterY - centerWorldY);
+      // Если центр экрана в пределах своей клетки или рядом — не показываем стрелку
+      if (distToCenter < cellSize * 1.5) return;
+
+      // Вектор от центра экрана к клетке
+      const dx = cellCenterX - centerWorldX;
+      const dy = cellCenterY - centerWorldY;
+      const len = Math.sqrt(dx*dx + dy*dy);
+      if (len === 0) return;
+      const ndx = dx / len;
+      const ndy = dy / len;
+
+      // Находим точку на границе видимой области (canvas)
+      const w = canvas.width;
+      const h = canvas.height;
+      let edgeX = screenCenterX + ndx * Math.min(w, h) * 0.4; // отступ от края
+      let edgeY = screenCenterY + ndy * Math.min(w, h) * 0.4;
+
+      // Убедимся, что точка на границе экрана
+      const margin = 30;
+      // Проецируем на границы
+      const tLeft = (margin - screenCenterX) / ndx;
+      const tRight = (w - margin - screenCenterX) / ndx;
+      const tTop = (margin - screenCenterY) / ndy;
+      const tBottom = (h - margin - screenCenterY) / ndy;
+
+      let t = Infinity;
+      if (tLeft > 0 && tLeft < t) t = tLeft;
+      if (tRight > 0 && tRight < t) t = tRight;
+      if (tTop > 0 && tTop < t) t = tTop;
+      if (tBottom > 0 && tBottom < t) t = tBottom;
+
+      if (t === Infinity) return;
+      const ix = screenCenterX + ndx * t;
+      const iy = screenCenterY + ndy * t;
+
+      // Рисуем треугольник
+      ctx.save();
+      ctx.translate(ix, iy);
+      const angle = Math.atan2(ndy, ndx);
+      ctx.rotate(angle);
+      ctx.fillStyle = '#FFD700';
+      ctx.shadowColor = '#000';
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.moveTo(10, 0);
+      ctx.lineTo(-8, -6);
+      ctx.lineTo(-8, 6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
     }
 
     // ---------- ОТРИСОВКА ----------
@@ -240,15 +322,18 @@
       ctx.textAlign = 'start';
       ctx.restore();
 
+      // Стрелка-указатель (рисуется в экранных координатах)
+      drawDirectionIndicator();
+
       // UI
       if (currentPlayer.id && currentPlayer.hashtag) {
         legend.style.display = 'flex';
         legendColor.style.backgroundColor = currentPlayer.color;
         legendHashtag.textContent = '#' + currentPlayer.hashtag;
-        bottomRightButtons.style.display = 'flex';
+        menuBtn.style.display = 'block';
       } else {
         legend.style.display = 'none';
-        bottomRightButtons.style.display = 'none';
+        menuBtn.style.display = 'none';
       }
       updateLeaderboard();
     }
@@ -279,33 +364,6 @@
       }
       step();
     }
-
-    // Центрирование на своих клетках (без дёрганий)
-    function centerOnMyCells() {
-      if (!currentPlayer.hashtag) return;
-      const bounds = getTerritoryBounds(currentPlayer.id);
-      if (bounds.count === 0) {
-        // fallback на точку спауна
-        if (currentPlayer.spawnX != null && currentPlayer.spawnY != null) {
-          const centerX = currentPlayer.spawnX * CELL_SIZE + CELL_SIZE/2;
-          const centerY = currentPlayer.spawnY * CELL_SIZE + CELL_SIZE/2;
-          viewX = centerX - canvas.width / (2 * zoom);
-          viewY = centerY - canvas.height / (2 * zoom);
-        }
-        drawMap();
-        return;
-      }
-      const visibleW = canvas.width, visibleH = canvas.height;
-      const territoryW = bounds.width*CELL_SIZE, territoryH = bounds.height*CELL_SIZE;
-      const fitZoom = Math.min(visibleW/territoryW, visibleH/territoryH, MAX_ZOOM) * 0.9;
-      zoom = Math.max(MIN_ZOOM, fitZoom);
-      const centerX = (bounds.minX+bounds.maxX)/2*CELL_SIZE + CELL_SIZE/2;
-      const centerY = (bounds.minY+bounds.maxY)/2*CELL_SIZE + CELL_SIZE/2;
-      viewX = centerX - canvas.width/(2*zoom);
-      viewY = centerY - canvas.height/(2*zoom);
-      drawMap();
-    }
-    homeBtn.addEventListener('click', centerOnMyCells);
 
     // Меню
     menuBtn.addEventListener('click', async () => {
@@ -382,7 +440,7 @@
       canvas.style.cursor = 'default';
     });
 
-    // Зум (без рывков)
+    // Зум
     canvas.addEventListener('wheel', e => {
       e.preventDefault();
       const rect = canvas.getBoundingClientRect();
@@ -394,7 +452,6 @@
         viewX = worldX*newZoom - mx;
         viewY = worldY*newZoom - my;
         zoom = newZoom;
-        // не вызываем clampCamera, чтобы не сбить позицию
         drawMap();
       }
     });
@@ -430,7 +487,7 @@
     });
     canvas.addEventListener('touchend', e => { if (e.touches.length===0) { isDragging=false; lastTouches=null; } });
 
-    // Атака (левая кнопка)
+    // Атака
     canvas.addEventListener('click', e => {
       if (isDragging || animating || spectating) return;
       if (!currentPlayer.hashtag) return;
@@ -488,7 +545,6 @@
           currentPlayer.spawnX = res.player.spawnX; currentPlayer.spawnY = res.player.spawnY;
           applyServerResponse(res, null);
           hideSelection();
-          centerOnMyCells();
         } else alert(res.error);
       });
     }
@@ -562,9 +618,6 @@
           showSelection(AVAILABLE_HASHTAGS || [], taken);
         }
         resizeCanvas();
-        if (currentPlayer.spawnX !== null && currentPlayer.hashtag) {
-          centerOnMyCells();
-        }
       })
       .catch(err => { updateInfo('Ошибка: '+err); console.error(err); });
 
