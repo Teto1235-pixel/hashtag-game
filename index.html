@@ -5,29 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>Hashtag Territory</title>
   <style>
-    body {
-      margin: 0; padding: 0; background: #222;
-      font-family: 'Courier New', monospace;
-      overflow: hidden; touch-action: manipulation;
-    }
-    #canvasContainer {
-      width: 100%; height: 100vh;
-      display: flex; justify-content: center; align-items: center;
-    }
-    canvas { display: block; max-width: 100%; max-height: 100%; touch-action: none; }
-    #info { position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(255,255,255,0.9); padding: 4px 8px; border-radius: 4px; }
-    #legend { position: absolute; bottom: 20px; left: 20px; z-index: 10; background: rgba(255,255,255,0.9); padding: 8px 12px; border-radius: 8px; display: none; align-items: center; gap: 8px; }
-    #legendColor { width: 20px; height: 20px; border: 1px solid #333; }
-    #homeBtn { position: absolute; bottom: 20px; right: 20px; z-index: 10; background: rgba(255,255,255,0.9); border: 1px solid #ccc; padding: 8px 12px; border-radius: 8px; font-size: 16px; cursor: pointer; display: none; }
-    #leaderboard { position: absolute; top: 10px; right: 10px; z-index: 10; background: rgba(0,0,0,0.5); color: white; padding: 8px 12px; border-radius: 8px; max-width: 200px; font-size: 12px; display: none; }
-    .leader-item { display: flex; align-items: center; margin-bottom: 4px; }
-    .leader-color { width: 10px; height: 10px; margin-right: 5px; border: 1px solid #fff; }
-    .leader-tag { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .leader-cells { margin-left: 5px; }
-    #selection { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border: 1px solid #ccc; padding: 20px; z-index: 20; max-height: 80vh; overflow-y: auto; }
-    #attackPanel { display: none; position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: white; border: 1px solid #ccc; padding: 15px; z-index: 20; text-align: center; }
-    button { margin: 5px; padding: 8px 12px; cursor: pointer; font-family: 'Courier New', monospace; }
-    input[type=range] { width: 200px; }
+    body { margin:0; padding:0; background:#222; font-family:'Courier New',monospace; overflow:hidden; touch-action:manipulation; }
+    #canvasContainer { width:100%; height:100vh; display:flex; justify-content:center; align-items:center; }
+    canvas { display:block; max-width:100%; max-height:100%; touch-action:none; }
+    #info { position:absolute; top:10px; left:10px; z-index:10; background:rgba(255,255,255,0.9); padding:4px 8px; border-radius:4px; }
+    #legend { position:absolute; bottom:20px; left:20px; z-index:10; background:rgba(255,255,255,0.9); padding:8px 12px; border-radius:8px; display:none; align-items:center; gap:8px; }
+    #legendColor { width:20px; height:20px; border:1px solid #333; }
+    #homeBtn { position:absolute; bottom:20px; right:20px; z-index:10; background:rgba(255,255,255,0.9); border:1px solid #ccc; padding:8px 12px; border-radius:8px; font-size:16px; cursor:pointer; display:none; }
+    #leaderboard { position:absolute; top:10px; right:10px; z-index:10; background:rgba(0,0,0,0.5); color:white; padding:8px 12px; border-radius:8px; max-width:200px; font-size:12px; display:none; }
+    .leader-item { display:flex; align-items:center; margin-bottom:4px; }
+    .leader-color { width:10px; height:10px; margin-right:5px; border:1px solid #fff; }
+    .leader-tag { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .leader-cells { margin-left:5px; }
+    #selection { display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:white; border:1px solid #ccc; padding:20px; z-index:20; max-height:80vh; overflow-y:auto; }
+    #attackPanel { display:none; position:absolute; bottom:20px; left:50%; transform:translateX(-50%); background:white; border:1px solid #ccc; padding:15px; z-index:20; text-align:center; }
+    button { margin:5px; padding:8px 12px; cursor:pointer; font-family:'Courier New',monospace; }
+    input[type=range] { width:200px; }
   </style>
 </head>
 <body>
@@ -57,7 +50,7 @@
   <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
   <script>
     // ---------- НАСТРОЙКИ ----------
-    const CELL_SIZE = 8;          // немного крупнее для читаемости
+    const CELL_SIZE = 8;
     let MAP_W = 200;
     let MAP_H = 200;
     const SERVER_URL = 'https://here-vacation-mistress-region.trycloudflare.com'; // замените
@@ -107,25 +100,16 @@
     document.addEventListener('gesturechange', e => e.preventDefault());
     document.addEventListener('gestureend', e => e.preventDefault());
 
-    // ---------- КАМЕРА С ГИБКИМИ ОГРАНИЧЕНИЯМИ ----------
+    // ---------- УМНАЯ КАМЕРА (можно довести край до центра) ----------
     function clampCamera() {
       const worldW = MAP_W * CELL_SIZE;
       const worldH = MAP_H * CELL_SIZE;
       const visibleW = canvas.width / zoom;
       const visibleH = canvas.height / zoom;
 
-      // Если мир меньше видимой области — разрешаем отрицательные значения,
-      // чтобы карта могла центрироваться или смещаться, но не отрываться от краёв.
-      if (worldW <= visibleW) {
-        viewX = Math.max(worldW - visibleW, Math.min(0, viewX));
-      } else {
-        viewX = Math.max(0, Math.min(viewX, worldW - visibleW));
-      }
-      if (worldH <= visibleH) {
-        viewY = Math.max(worldH - visibleH, Math.min(0, viewY));
-      } else {
-        viewY = Math.max(0, Math.min(viewY, worldH - visibleH));
-      }
+      // Диапазон: от -visibleW/2 до worldW - visibleW/2
+      viewX = Math.max(-visibleW / 2, Math.min(viewX, worldW - visibleW / 2));
+      viewY = Math.max(-visibleH / 2, Math.min(viewY, worldH - visibleH / 2));
     }
 
     function isValidMap(m) {
@@ -151,7 +135,25 @@
       }
     }
 
-    // ---------- ОТРИСОВКА С ТЕКСТОМ ----------
+    // Вычисление границ своей территории (для текста и кнопки домой)
+    function getMyTerritoryBounds() {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      let count = 0;
+      for (let y = 0; y < MAP_H; y++) {
+        for (let x = 0; x < MAP_W; x++) {
+          if (map[y][x].ownerId === currentPlayer.id) {
+            if (x < minX) minX = x;
+            if (y < minY) minY = y;
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
+            count++;
+          }
+        }
+      }
+      return { minX, minY, maxX, maxY, count, width: maxX - minX + 1, height: maxY - minY + 1 };
+    }
+
+    // ---------- ОТРИСОВКА С ЖИРНЫМ ХЕШТЕГОМ ПОСЕРЕДИНЕ ТЕРРИТОРИИ ----------
     function drawMap() {
       if (!isValidMap(map)) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -203,21 +205,21 @@
         });
       }
 
-      // Полупрозрачные названия хештегов на своих клетках
+      // Жирный полупрозрачный хештег по центру территории
       if (currentPlayer.id && currentPlayer.hashtag) {
-        ctx.fillStyle = 'rgba(0,0,0,0.55)';
-        // Размер шрифта зависит от клетки и масштаба: базовая высота = CELL_SIZE * 0.6
-        const fontSize = Math.max(1, CELL_SIZE * 0.55);
-        ctx.font = `${fontSize}px "Courier New", monospace`;
-        ctx.textBaseline = 'bottom';
-        for (let y = 0; y < MAP_H; y++) {
-          for (let x = 0; x < MAP_W; x++) {
-            const cell = map[y][x];
-            if (cell.ownerId === currentPlayer.id) {
-              const tag = cell.hashtag || currentPlayer.hashtag;
-              ctx.fillText(tag, x * CELL_SIZE + 1, (y + 1) * CELL_SIZE - 1);
-            }
-          }
+        const bounds = getMyTerritoryBounds();
+        if (bounds.count > 0) {
+          const centerX = (bounds.minX + bounds.maxX) / 2 * CELL_SIZE + CELL_SIZE/2;
+          const centerY = (bounds.minY + bounds.maxY) / 2 * CELL_SIZE + CELL_SIZE/2;
+          // Размер шрифта пропорционален корню из площади территории
+          const area = bounds.width * bounds.height;
+          const fontSize = Math.max(12, Math.sqrt(area) * 2.5);
+          ctx.fillStyle = 'rgba(0,0,0,0.45)';
+          ctx.font = `bold ${fontSize}px "Courier New", monospace`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(currentPlayer.hashtag, centerX, centerY);
+          ctx.textAlign = 'start'; // сброс
         }
       }
 
@@ -286,23 +288,31 @@
       step();
     }
 
-    // Центрирование на своих клетках
+    // ---------- КНОПКА "МОИ КЛЕТКИ" С АВТОЗУМОМ ----------
     function centerOnMyCells() {
-      let sumX = 0, sumY = 0, count = 0;
-      for (let y = 0; y < MAP_H; y++) {
-        for (let x = 0; x < MAP_W; x++) {
-          if (map[y][x].ownerId === currentPlayer.id) {
-            sumX += x;
-            sumY += y;
-            count++;
-          }
-        }
-      }
-      if (count > 0) {
-        centerOn(Math.floor(sumX / count), Math.floor(sumY / count));
-      } else {
+      const bounds = getMyTerritoryBounds();
+      if (bounds.count === 0) {
         centerOn(currentPlayer.spawnX, currentPlayer.spawnY);
+        return;
       }
+
+      // Подбираем зум, чтобы территория поместилась
+      const worldW = MAP_W * CELL_SIZE;
+      const worldH = MAP_H * CELL_SIZE;
+      const visibleW = canvas.width;
+      const visibleH = canvas.height;
+      const territoryW = bounds.width * CELL_SIZE;
+      const territoryH = bounds.height * CELL_SIZE;
+      const fitZoom = Math.min(visibleW / territoryW, visibleH / territoryH, MAX_ZOOM);
+      const targetZoom = Math.min(fitZoom, MAX_ZOOM) * 0.9; // небольшой отступ
+
+      zoom = Math.max(MIN_ZOOM, targetZoom);
+      const centerX = (bounds.minX + bounds.maxX) / 2 * CELL_SIZE + CELL_SIZE/2;
+      const centerY = (bounds.minY + bounds.maxY) / 2 * CELL_SIZE + CELL_SIZE/2;
+      viewX = centerX - canvas.width / (2 * zoom);
+      viewY = centerY - canvas.height / (2 * zoom);
+      clampCamera();
+      drawMap();
     }
 
     function centerOn(worldX, worldY) {
