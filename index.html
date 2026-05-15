@@ -18,7 +18,9 @@
     .leader-tag { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .leader-cells { margin-left:5px; }
     #selection { display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:white; border:1px solid #ccc; padding:20px; z-index:20; max-height:80vh; overflow-y:auto; }
+    #selection button.taken { background:#ffcccc; color:#900; cursor:not-allowed; text-decoration:line-through; }
     #attackPanel { display:none; position:absolute; bottom:20px; left:50%; transform:translateX(-50%); background:white; border:1px solid #ccc; padding:15px; z-index:20; text-align:center; }
+    #gameover { display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:100; justify-content:center; align-items:center; flex-direction:column; color:white; font-size:24px; }
     button { margin:5px; padding:8px 12px; cursor:pointer; font-family:'Courier New',monospace; }
     input[type=range] { width:200px; }
   </style>
@@ -34,6 +36,8 @@
   <div id="selection">
     <h3>Выберите хештег</h3>
     <div id="hashtagList"></div>
+    <hr>
+    <button id="spectateBtn">👀 Наблюдать</button>
   </div>
   <div id="attackPanel">
     <div>Цель: <span id="targetCoords"></span></div>
@@ -43,6 +47,10 @@
     <button id="attackBtn">Атаковать</button>
     <button id="cancelAttackBtn">Отмена</button>
   </div>
+  <div id="gameover">
+    <div>💔 Вы потеряли все клетки!</div>
+    <button id="gameoverSpectate">Наблюдать</button>
+  </div>
   <div id="canvasContainer">
     <canvas id="gameCanvas"></canvas>
   </div>
@@ -51,8 +59,7 @@
   <script>
     // ---------- НАСТРОЙКИ ----------
     const CELL_SIZE = 8;
-    let MAP_W = 200;
-    let MAP_H = 200;
+    let MAP_W = 200, MAP_H = 200;
     const SERVER_URL = 'https://here-vacation-mistress-region.trycloudflare.com'; // замените
 
     const canvas = document.getElementById('gameCanvas');
@@ -67,7 +74,7 @@
     }
     window.addEventListener('resize', resizeCanvas);
 
-    // ---------- СОСТОЯНИЕ ИГРЫ ----------
+    // ---------- СОСТОЯНИЕ ----------
     const currentPlayer = {
       id: null, likes: 0, color: '#cccccc', hashtag: null, spawnX: 0, spawnY: 0
     };
@@ -75,15 +82,12 @@
     let playersInfo = {};
     let adjacentSet = new Set();
     let leaderboard = [];
-
-    let animating = false;
-    let animationQueue = [];
-    let animationTimer = null;
-
+    let animating = false, animationQueue = [], animationTimer = null;
     let viewX = 0, viewY = 0, zoom = 1;
     const MIN_ZOOM = 0.3, MAX_ZOOM = 5;
+    let spectating = false; // режим наблюдателя
 
-    // UI элементы
+    // UI
     const attackPanel = document.getElementById('attackPanel');
     const powerSlider = document.getElementById('powerSlider');
     const powerValue = document.getElementById('powerValue');
@@ -93,23 +97,23 @@
     const legendHashtag = document.getElementById('legendHashtag');
     const homeBtn = document.getElementById('homeBtn');
     const leaderboardDiv = document.getElementById('leaderboard');
+    const selectionDiv = document.getElementById('selection');
+    const gameoverDiv = document.getElementById('gameover');
     let selectedTarget = null;
 
-    // Блокировка системного зума
     document.addEventListener('gesturestart', e => e.preventDefault());
     document.addEventListener('gesturechange', e => e.preventDefault());
     document.addEventListener('gestureend', e => e.preventDefault());
 
-    // ---------- УМНАЯ КАМЕРА (можно довести край до центра) ----------
+    // ---------- КАМЕРА (можно край в центр) ----------
     function clampCamera() {
       const worldW = MAP_W * CELL_SIZE;
       const worldH = MAP_H * CELL_SIZE;
       const visibleW = canvas.width / zoom;
       const visibleH = canvas.height / zoom;
-
-      // Диапазон: от -visibleW/2 до worldW - visibleW/2
-      viewX = Math.max(-visibleW / 2, Math.min(viewX, worldW - visibleW / 2));
-      viewY = Math.max(-visibleH / 2, Math.min(viewY, worldH - visibleH / 2));
+      // границы: разрешаем выходить за пределы на половину экрана, чтобы край был в центре
+      viewX = Math.max(-visibleW/2, Math.min(viewX, worldW - visibleW/2));
+      viewY = Math.max(-visibleH/2, Math.min(viewY, worldH - visibleH/2));
     }
 
     function isValidMap(m) {
@@ -118,14 +122,13 @@
 
     function updateAdjacentSet() {
       adjacentSet.clear();
-      if (!currentPlayer.id) return;
-      for (let y = 0; y < MAP_H; y++) {
-        for (let x = 0; x < MAP_W; x++) {
+      if (!currentPlayer.id || !currentPlayer.hashtag) return;
+      for (let y=0; y<MAP_H; y++) {
+        for (let x=0; x<MAP_W; x++) {
           if (map[y][x].ownerId !== currentPlayer.id) {
-            const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
-            for (const [dx, dy] of dirs) {
-              const nx = x + dx, ny = y + dy;
-              if (nx >= 0 && nx < MAP_W && ny >= 0 && ny < MAP_H && map[ny][nx].ownerId === currentPlayer.id) {
+            for (const [dx,dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+              const nx = x+dx, ny = y+dy;
+              if (nx>=0 && nx<MAP_W && ny>=0 && ny<MAP_H && map[ny][nx].ownerId === currentPlayer.id) {
                 adjacentSet.add(`${x},${y}`);
                 break;
               }
@@ -135,97 +138,89 @@
       }
     }
 
-    // Вычисление границ своей территории (для текста и кнопки домой)
-    function getMyTerritoryBounds() {
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      let count = 0;
-      for (let y = 0; y < MAP_H; y++) {
-        for (let x = 0; x < MAP_W; x++) {
-          if (map[y][x].ownerId === currentPlayer.id) {
-            if (x < minX) minX = x;
-            if (y < minY) minY = y;
-            if (x > maxX) maxX = x;
-            if (y > maxY) maxY = y;
+    function getTerritoryBounds(ownerId) {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, count = 0;
+      for (let y=0; y<MAP_H; y++) {
+        for (let x=0; x<MAP_W; x++) {
+          if (map[y][x].ownerId === ownerId) {
+            if (x < minX) minX = x; if (y < minY) minY = y;
+            if (x > maxX) maxX = x; if (y > maxY) maxY = y;
             count++;
           }
         }
       }
-      return { minX, minY, maxX, maxY, count, width: maxX - minX + 1, height: maxY - minY + 1 };
+      return { minX, minY, maxX, maxY, count, width: maxX-minX+1, height: maxY-minY+1 };
     }
 
-    // ---------- ОТРИСОВКА С ЖИРНЫМ ХЕШТЕГОМ ПОСЕРЕДИНЕ ТЕРРИТОРИИ ----------
+    // ---------- ОТРИСОВКА (свои + чужие надписи) ----------
     function drawMap() {
       if (!isValidMap(map)) return;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0,0,canvas.width,canvas.height);
       ctx.save();
       ctx.translate(-viewX, -viewY);
       ctx.scale(zoom, zoom);
 
-      // Фон мира
+      // Фон
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, MAP_W * CELL_SIZE, MAP_H * CELL_SIZE);
+      ctx.fillRect(0,0,MAP_W*CELL_SIZE, MAP_H*CELL_SIZE);
 
       // Клетки
-      for (let y = 0; y < MAP_H; y++) {
-        for (let x = 0; x < MAP_W; x++) {
+      for (let y=0; y<MAP_H; y++) {
+        for (let x=0; x<MAP_W; x++) {
           const cell = map[y][x];
-          const px = x * CELL_SIZE;
-          const py = y * CELL_SIZE;
           if (cell.ownerId) {
-            const ownerInfo = playersInfo[cell.ownerId];
-            ctx.fillStyle = ownerInfo ? ownerInfo.color : '#cccccc';
-            ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
+            const info = playersInfo[cell.ownerId];
+            ctx.fillStyle = info ? info.color : '#cccccc';
+            ctx.fillRect(x*CELL_SIZE, y*CELL_SIZE, CELL_SIZE, CELL_SIZE);
           }
         }
       }
 
       // Сетка
       ctx.strokeStyle = '#e0e0e0';
-      ctx.lineWidth = 0.3 / zoom;
-      for (let i = 0; i <= MAP_H; i++) {
-        ctx.beginPath();
-        ctx.moveTo(0, i * CELL_SIZE);
-        ctx.lineTo(MAP_W * CELL_SIZE, i * CELL_SIZE);
-        ctx.stroke();
-      }
-      for (let i = 0; i <= MAP_W; i++) {
-        ctx.beginPath();
-        ctx.moveTo(i * CELL_SIZE, 0);
-        ctx.lineTo(i * CELL_SIZE, MAP_H * CELL_SIZE);
-        ctx.stroke();
-      }
+      ctx.lineWidth = 0.3/zoom;
+      for (let i=0; i<=MAP_H; i++) { ctx.beginPath(); ctx.moveTo(0,i*CELL_SIZE); ctx.lineTo(MAP_W*CELL_SIZE,i*CELL_SIZE); ctx.stroke(); }
+      for (let i=0; i<=MAP_W; i++) { ctx.beginPath(); ctx.moveTo(i*CELL_SIZE,0); ctx.lineTo(i*CELL_SIZE,MAP_H*CELL_SIZE); ctx.stroke(); }
 
       // Подсветка соседей
-      if (!animating && currentPlayer.id && adjacentSet.size > 0) {
+      if (!animating && currentPlayer.id && currentPlayer.hashtag && adjacentSet.size) {
         ctx.strokeStyle = '#FFD700';
-        ctx.lineWidth = 1.5 / zoom;
+        ctx.lineWidth = 1.5/zoom;
         adjacentSet.forEach(coord => {
-          const [cx, cy] = coord.split(',').map(Number);
-          ctx.strokeRect(cx * CELL_SIZE, cy * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+          const [cx,cy] = coord.split(',').map(Number);
+          ctx.strokeRect(cx*CELL_SIZE, cy*CELL_SIZE, CELL_SIZE, CELL_SIZE);
         });
       }
 
-      // Жирный полупрозрачный хештег по центру территории
-      if (currentPlayer.id && currentPlayer.hashtag) {
-        const bounds = getMyTerritoryBounds();
-        if (bounds.count > 0) {
-          const centerX = (bounds.minX + bounds.maxX) / 2 * CELL_SIZE + CELL_SIZE/2;
-          const centerY = (bounds.minY + bounds.maxY) / 2 * CELL_SIZE + CELL_SIZE/2;
-          // Размер шрифта пропорционален корню из площади территории
+      // Надписи для всех владельцев территорий (кроме пустых)
+      const drawnOwners = new Set();
+      for (let y=0; y<MAP_H; y++) {
+        for (let x=0; x<MAP_W; x++) {
+          const owner = map[y][x].ownerId;
+          if (!owner || drawnOwners.has(owner)) continue;
+          drawnOwners.add(owner);
+          const bounds = getTerritoryBounds(owner);
+          if (bounds.count === 0) continue;
+          const info = playersInfo[owner];
+          if (!info) continue;
+          const centerX = (bounds.minX + bounds.maxX)/2 * CELL_SIZE + CELL_SIZE/2;
+          const centerY = (bounds.minY + bounds.maxY)/2 * CELL_SIZE + CELL_SIZE/2;
           const area = bounds.width * bounds.height;
-          const fontSize = Math.max(12, Math.sqrt(area) * 2.5);
-          ctx.fillStyle = 'rgba(0,0,0,0.45)';
+          const fontSize = Math.max(10, Math.sqrt(area) * 2.2);
+          ctx.fillStyle = 'rgba(0,0,0,0.5)';
           ctx.font = `bold ${fontSize}px "Courier New", monospace`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(currentPlayer.hashtag, centerX, centerY);
-          ctx.textAlign = 'start'; // сброс
+          // Хештег крупно, под ним количество клеток помельче
+          ctx.fillText(info.hashtag || '?', centerX, centerY - fontSize*0.2);
+          ctx.font = `${fontSize*0.6}px "Courier New", monospace`;
+          ctx.fillText(`${bounds.count}`, centerX, centerY + fontSize*0.6);
         }
       }
-
+      ctx.textAlign = 'start';
       ctx.restore();
 
-      // Легенда и кнопка
+      // UI
       if (currentPlayer.id && currentPlayer.hashtag) {
         legend.style.display = 'flex';
         legendColor.style.backgroundColor = currentPlayer.color;
@@ -235,255 +230,166 @@
         legend.style.display = 'none';
         homeBtn.style.display = 'none';
       }
-
       updateLeaderboard();
     }
 
     function updateLeaderboard() {
-      if (!leaderboard.length) {
-        leaderboardDiv.style.display = 'none';
-        return;
-      }
+      if (!leaderboard.length) { leaderboardDiv.style.display = 'none'; return; }
       leaderboardDiv.style.display = 'block';
       let html = '<strong>Топ-10</strong>';
-      leaderboard.forEach(entry => {
-        html += `<div class="leader-item">
-          <div class="leader-color" style="background:${entry.color}"></div>
-          <span class="leader-tag">#${entry.hashtag}</span>
-          <span class="leader-cells">${entry.cells}</span>
-        </div>`;
+      leaderboard.forEach(e => {
+        html += `<div class="leader-item"><div class="leader-color" style="background:${e.color}"></div><span class="leader-tag">#${e.hashtag}</span><span class="leader-cells">${e.cells}</span></div>`;
       });
       leaderboardDiv.innerHTML = html;
     }
 
-    function updateInfo(text) {
-      document.getElementById('info').textContent = text;
-    }
+    function updateInfo(text) { document.getElementById('info').textContent = text; }
 
-    // Анимация захвата
+    // Анимация
     function animateCapture(cells, serverMap) {
       if (!cells.length) {
-        map = serverMap;
-        updateAdjacentSet();
-        drawMap();
-        updateInfo(`Лайков: ${currentPlayer.likes}`);
-        animating = false;
-        return;
+        map = serverMap; updateAdjacentSet(); drawMap(); updateInfo(`Лайков: ${currentPlayer.likes}`);
+        animating = false; return;
       }
-      animating = true;
-      animationQueue = [...cells];
-      map = serverMap;
+      animating = true; animationQueue = [...cells]; map = serverMap;
       function step() {
-        if (!animationQueue.length) {
-          animating = false;
-          updateAdjacentSet();
-          drawMap();
-          updateInfo(`Лайков: ${currentPlayer.likes}`);
-          return;
-        }
-        drawMap();
-        animationQueue.shift();
+        if (!animationQueue.length) { animating = false; updateAdjacentSet(); drawMap(); updateInfo(`Лайков: ${currentPlayer.likes}`); return; }
+        drawMap(); animationQueue.shift();
         animationTimer = setTimeout(step, 200);
       }
       step();
     }
 
-    // ---------- КНОПКА "МОИ КЛЕТКИ" С АВТОЗУМОМ ----------
+    // Центрирование
     function centerOnMyCells() {
-      const bounds = getMyTerritoryBounds();
-      if (bounds.count === 0) {
-        centerOn(currentPlayer.spawnX, currentPlayer.spawnY);
-        return;
-      }
-
-      // Подбираем зум, чтобы территория поместилась
-      const worldW = MAP_W * CELL_SIZE;
-      const worldH = MAP_H * CELL_SIZE;
-      const visibleW = canvas.width;
-      const visibleH = canvas.height;
-      const territoryW = bounds.width * CELL_SIZE;
-      const territoryH = bounds.height * CELL_SIZE;
-      const fitZoom = Math.min(visibleW / territoryW, visibleH / territoryH, MAX_ZOOM);
-      const targetZoom = Math.min(fitZoom, MAX_ZOOM) * 0.9; // небольшой отступ
-
-      zoom = Math.max(MIN_ZOOM, targetZoom);
-      const centerX = (bounds.minX + bounds.maxX) / 2 * CELL_SIZE + CELL_SIZE/2;
-      const centerY = (bounds.minY + bounds.maxY) / 2 * CELL_SIZE + CELL_SIZE/2;
-      viewX = centerX - canvas.width / (2 * zoom);
-      viewY = centerY - canvas.height / (2 * zoom);
+      if (!currentPlayer.hashtag) return;
+      const bounds = getTerritoryBounds(currentPlayer.id);
+      if (bounds.count === 0) return;
+      const worldW = MAP_W*CELL_SIZE, worldH = MAP_H*CELL_SIZE;
+      const visibleW = canvas.width, visibleH = canvas.height;
+      const territoryW = bounds.width*CELL_SIZE, territoryH = bounds.height*CELL_SIZE;
+      const fitZoom = Math.min(visibleW/territoryW, visibleH/territoryH, MAX_ZOOM) * 0.9;
+      zoom = Math.max(MIN_ZOOM, fitZoom);
+      const centerX = (bounds.minX+bounds.maxX)/2*CELL_SIZE + CELL_SIZE/2;
+      const centerY = (bounds.minY+bounds.maxY)/2*CELL_SIZE + CELL_SIZE/2;
+      viewX = centerX - canvas.width/(2*zoom);
+      viewY = centerY - canvas.height/(2*zoom);
       clampCamera();
       drawMap();
     }
-
-    function centerOn(worldX, worldY) {
-      const targetWorldX = worldX * CELL_SIZE + CELL_SIZE/2;
-      const targetWorldY = worldY * CELL_SIZE + CELL_SIZE/2;
-      viewX = targetWorldX - canvas.width / (2 * zoom);
-      viewY = targetWorldY - canvas.height / (2 * zoom);
-      clampCamera();
-      drawMap();
-    }
-
     homeBtn.addEventListener('click', centerOnMyCells);
 
-    // Экран -> мировые координаты
     function screenToWorld(sx, sy) {
       const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-      const cx = (sx - rect.left) * scaleX;
-      const cy = (sy - rect.top) * scaleY;
+      const scaleX = canvas.width/rect.width, scaleY = canvas.height/rect.height;
+      const cx = (sx - rect.left)*scaleX, cy = (sy - rect.top)*scaleY;
       return {
-        x: Math.floor((cx + viewX) / zoom / CELL_SIZE),
-        y: Math.floor((cy + viewY) / zoom / CELL_SIZE)
+        x: Math.floor((cx + viewX)/zoom/CELL_SIZE),
+        y: Math.floor((cy + viewY)/zoom/CELL_SIZE)
       };
     }
 
-    // ---------- DRAG & ZOOM ----------
+    // Drag/Zoom
     let isDragging = false, dragStartX, dragStartY, dragStartViewX, dragStartViewY;
     canvas.addEventListener('mousedown', e => {
       if (e.button === 0 && !e.ctrlKey) {
-        isDragging = true;
-        dragStartX = e.clientX;
-        dragStartY = e.clientY;
-        dragStartViewX = viewX;
-        dragStartViewY = viewY;
-        canvas.style.cursor = 'grabbing';
-        e.preventDefault();
+        isDragging = true; dragStartX = e.clientX; dragStartY = e.clientY;
+        dragStartViewX = viewX; dragStartViewY = viewY;
+        canvas.style.cursor = 'grabbing'; e.preventDefault();
       }
     });
     window.addEventListener('mousemove', e => {
       if (!isDragging) return;
-      viewX = dragStartViewX - (e.clientX - dragStartX) / zoom;
-      viewY = dragStartViewY - (e.clientY - dragStartY) / zoom;
-      clampCamera();
-      drawMap();
+      viewX = dragStartViewX - (e.clientX - dragStartX)/zoom;
+      viewY = dragStartViewY - (e.clientY - dragStartY)/zoom;
+      clampCamera(); drawMap();
     });
-    window.addEventListener('mouseup', () => {
-      isDragging = false;
-      canvas.style.cursor = 'default';
-    });
+    window.addEventListener('mouseup', () => { isDragging = false; canvas.style.cursor = 'default'; });
     canvas.addEventListener('wheel', e => {
       e.preventDefault();
       const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-      const mouseCanvasX = (e.clientX - rect.left) * scaleX;
-      const mouseCanvasY = (e.clientY - rect.top) * scaleY;
-      const worldX = (mouseCanvasX + viewX) / zoom;
-      const worldY = (mouseCanvasY + viewY) / zoom;
-      const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * (e.deltaY > 0 ? 0.9 : 1.1)));
+      const scaleX = canvas.width/rect.width, scaleY = canvas.height/rect.height;
+      const mx = (e.clientX - rect.left)*scaleX, my = (e.clientY - rect.top)*scaleY;
+      const worldX = (mx + viewX)/zoom, worldY = (my + viewY)/zoom;
+      const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * (e.deltaY>0?0.9:1.1)));
       if (newZoom !== zoom) {
-        viewX = worldX * newZoom - mouseCanvasX;
-        viewY = worldY * newZoom - mouseCanvasY;
-        zoom = newZoom;
-        clampCamera();
-        drawMap();
+        viewX = worldX*newZoom - mx; viewY = worldY*newZoom - my;
+        zoom = newZoom; clampCamera(); drawMap();
       }
     });
-
-    // Тач-управление
+    // Touch
     let lastTouches = null;
     canvas.addEventListener('touchstart', e => {
-      e.preventDefault();
-      const touches = e.touches;
-      if (touches.length === 1) {
-        isDragging = true;
-        dragStartX = touches[0].clientX;
-        dragStartY = touches[0].clientY;
-        dragStartViewX = viewX;
-        dragStartViewY = viewY;
-      } else if (touches.length === 2) {
-        isDragging = false;
-        lastTouches = {
-          dist: Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY),
-          cx: (touches[0].clientX + touches[1].clientX)/2,
-          cy: (touches[0].clientY + touches[1].clientY)/2,
-          viewX, viewY, zoom
-        };
-      }
+      e.preventDefault(); const t = e.touches;
+      if (t.length===1) { isDragging=true; dragStartX=t[0].clientX; dragStartY=t[0].clientY; dragStartViewX=viewX; dragStartViewY=viewY; }
+      else if (t.length===2) { isDragging=false; lastTouches={ dist:Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY), cx:(t[0].clientX+t[1].clientX)/2, cy:(t[0].clientY+t[1].clientY)/2, viewX, viewY, zoom }; }
     });
     canvas.addEventListener('touchmove', e => {
-      e.preventDefault();
-      const touches = e.touches;
-      if (touches.length === 1 && isDragging) {
-        viewX = dragStartViewX - (touches[0].clientX - dragStartX) / zoom;
-        viewY = dragStartViewY - (touches[0].clientY - dragStartY) / zoom;
-        clampCamera();
-        drawMap();
-      } else if (touches.length === 2 && lastTouches) {
-        const newDist = Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+      e.preventDefault(); const t = e.touches;
+      if (t.length===1 && isDragging) {
+        viewX = dragStartViewX - (t[0].clientX - dragStartX)/zoom;
+        viewY = dragStartViewY - (t[0].clientY - dragStartY)/zoom;
+        clampCamera(); drawMap();
+      } else if (t.length===2 && lastTouches) {
+        const newDist = Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
         const scale = newDist / lastTouches.dist;
         const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, lastTouches.zoom * scale));
         const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
-        const canvasCX = (lastTouches.cx - rect.left) * scaleX;
-        const canvasCY = (lastTouches.cy - rect.top) * scaleY;
-        const worldX = (canvasCX + lastTouches.viewX) / lastTouches.zoom;
-        const worldY = (canvasCY + lastTouches.viewY) / lastTouches.zoom;
-        zoom = newZoom;
-        viewX = worldX * zoom - canvasCX;
-        viewY = worldY * zoom - canvasCY;
-        lastTouches = { dist: newDist, cx: lastTouches.cx, cy: lastTouches.cy, viewX, viewY, zoom };
-        clampCamera();
-        drawMap();
+        const sx = canvas.width/rect.width, sy = canvas.height/rect.height;
+        const cx = (lastTouches.cx - rect.left)*sx, cy = (lastTouches.cy - rect.top)*sy;
+        const worldX = (cx + lastTouches.viewX)/lastTouches.zoom, worldY = (cy + lastTouches.viewY)/lastTouches.zoom;
+        zoom = newZoom; viewX = worldX*zoom - cx; viewY = worldY*zoom - cy;
+        lastTouches = { dist:newDist, cx:lastTouches.cx, cy:lastTouches.cy, viewX, viewY, zoom };
+        clampCamera(); drawMap();
       }
     });
-    canvas.addEventListener('touchend', e => {
-      if (e.touches.length === 0) { isDragging = false; lastTouches = null; }
-    });
+    canvas.addEventListener('touchend', e => { if (e.touches.length===0) { isDragging=false; lastTouches=null; } });
 
-    // ---------- АТАКА ----------
+    // Атака
     canvas.addEventListener('click', e => {
-      if (isDragging || animating) return;
+      if (isDragging || animating || spectating) return;
       if (!currentPlayer.hashtag) return;
-      const { x, y } = screenToWorld(e.clientX, e.clientY);
-      if (x < 0 || x >= MAP_W || y < 0 || y >= MAP_H) return;
-      if (!adjacentSet.has(`${x},${y}`)) {
-        updateInfo('Можно атаковать только подсвеченные клетки');
-        return;
-      }
+      const {x, y} = screenToWorld(e.clientX, e.clientY);
+      if (x<0||x>=MAP_W||y<0||y>=MAP_H) return;
+      if (!adjacentSet.has(`${x},${y}`)) { updateInfo('Можно атаковать только подсвеченные клетки'); return; }
       showAttackPanel(x, y);
     });
 
-    function showAttackPanel(x, y) {
-      selectedTarget = { x, y };
-      targetCoords.textContent = `${x}, ${y}`;
-      powerSlider.max = currentPlayer.likes;
-      powerSlider.value = 1;
-      powerValue.textContent = '1';
+    function showAttackPanel(x,y) {
+      selectedTarget = {x,y}; targetCoords.textContent = `${x},${y}`;
+      powerSlider.max = currentPlayer.likes; powerSlider.value = 1; powerValue.textContent = '1';
       attackPanel.style.display = 'block';
     }
-    function hideAttackPanel() {
-      attackPanel.style.display = 'none';
-      selectedTarget = null;
-    }
-    powerSlider.addEventListener('input', () => powerValue.textContent = powerSlider.value);
-    document.getElementById('attackBtn').addEventListener('click', () => {
+    function hideAttackPanel() { attackPanel.style.display='none'; selectedTarget=null; }
+    powerSlider.addEventListener('input', ()=> powerValue.textContent = powerSlider.value);
+    document.getElementById('attackBtn').addEventListener('click', ()=>{
       if (!selectedTarget || animating) return;
       attackCell(selectedTarget.x, selectedTarget.y, Number(powerSlider.value));
       hideAttackPanel();
     });
     document.getElementById('cancelAttackBtn').addEventListener('click', hideAttackPanel);
 
-    // ---------- СЕРВЕРНЫЕ ЗАПРОСЫ ----------
+    // Серверные запросы
     function applyServerResponse(data, capturedCells) {
       if (data.player) {
         currentPlayer.likes = data.player.likes;
-        if (!currentPlayer.hashtag) currentPlayer.hashtag = data.player.hashtag;
-        if (data.player.spawnX !== undefined) {
-          currentPlayer.spawnX = data.player.spawnX;
-          currentPlayer.spawnY = data.player.spawnY;
-        }
+        if (!currentPlayer.hashtag && data.player.hashtag) currentPlayer.hashtag = data.player.hashtag;
+        if (data.player.spawnX !== undefined) { currentPlayer.spawnX = data.player.spawnX; currentPlayer.spawnY = data.player.spawnY; }
       }
       if (data.playersInfo) playersInfo = data.playersInfo;
-      if (data.worldW) MAP_W = data.worldW;
-      if (data.worldH) MAP_H = data.worldH;
+      if (data.worldW) MAP_W = data.worldW; if (data.worldH) MAP_H = data.worldH;
       if (data.leaderboard) leaderboard = data.leaderboard;
 
-      if (capturedCells?.length) {
-        animateCapture(capturedCells, data.map);
-      } else {
+      // Проверка на поражение текущего игрока (если у него больше нет клеток, но есть хештег)
+      if (currentPlayer.hashtag && data.defeatedPlayerId === currentPlayer.id) {
+        // игрок проиграл
+        currentPlayer.hashtag = null;
+        spectating = true;
+        gameoverDiv.style.display = 'flex';
+      }
+
+      if (capturedCells?.length) animateCapture(capturedCells, data.map);
+      else {
         if (isValidMap(data.map)) map = data.map;
         updateAdjacentSet();
         drawMap();
@@ -492,101 +398,106 @@
     }
 
     function claimHashtag(hashtag) {
-      fetch(`${SERVER_URL}/claim`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentPlayer.id, hashtag })
-      })
-      .then(r => r.json())
-      .then(res => {
+      fetch(`${SERVER_URL}/claim`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:currentPlayer.id, hashtag}) })
+      .then(r=>r.json()).then(res=>{
         if (res.success) {
           currentPlayer.color = res.player.color;
-          currentPlayer.spawnX = res.player.spawnX;
-          currentPlayer.spawnY = res.player.spawnY;
+          currentPlayer.spawnX = res.player.spawnX; currentPlayer.spawnY = res.player.spawnY;
           applyServerResponse(res, null);
-          hideHashtagSelection();
-          centerOn(currentPlayer.spawnX, currentPlayer.spawnY);
+          hideSelection();
+          centerOnMyCells();
         } else alert(res.error);
       });
     }
 
-    function attackCell(x, y, amount) {
-      fetch(`${SERVER_URL}/attack`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentPlayer.id, x, y, amount })
-      })
-      .then(r => r.json())
-      .then(res => {
+    function attackCell(x,y,amount) {
+      fetch(`${SERVER_URL}/attack`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:currentPlayer.id, x,y,amount}) })
+      .then(r=>r.json()).then(res=>{
         if (res.success) applyServerResponse(res, res.capturedCells);
-        else {
-          updateInfo(`Ошибка: ${res.error}`);
-          applyServerResponse(res, null);
-        }
+        else { updateInfo(`Ошибка: ${res.error}`); applyServerResponse(res, null); }
       });
     }
 
     function fetchState() {
       if (!currentPlayer.id || animating) return;
-      fetch(`${SERVER_URL}/state`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentPlayer.id })
-      })
-      .then(r => r.json())
-      .then(data => applyServerResponse(data, null));
+      fetch(`${SERVER_URL}/state`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:currentPlayer.id}) })
+      .then(r=>r.json()).then(data=>applyServerResponse(data, null));
     }
 
-    function showHashtagSelection(hashtags) {
+    function spectate() {
+      fetch(`${SERVER_URL}/spectate`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:currentPlayer.id}) })
+      .then(() => {
+        currentPlayer.hashtag = null;
+        spectating = true;
+        gameoverDiv.style.display = 'none';
+        hideSelection();
+        updateInfo('Режим наблюдателя');
+        drawMap();
+      });
+    }
+
+    // Выбор хештега: занятые красным, кнопка наблюдателя
+    function showSelection(hashtags, takenHashtags) {
       const listDiv = document.getElementById('hashtagList');
       listDiv.innerHTML = '';
       hashtags.forEach(tag => {
         const btn = document.createElement('button');
         btn.textContent = '#' + tag;
-        btn.onclick = () => claimHashtag(tag);
+        if (takenHashtags?.includes(tag)) {
+          btn.classList.add('taken');
+          btn.disabled = true;
+          btn.title = 'Хештег занят';
+        } else {
+          btn.onclick = () => claimHashtag(tag);
+        }
         listDiv.appendChild(btn);
       });
-      document.getElementById('selection').style.display = 'block';
-    }
-    function hideHashtagSelection() {
-      document.getElementById('selection').style.display = 'none';
+      document.getElementById('spectateBtn').onclick = spectate;
+      selectionDiv.style.display = 'block';
     }
 
-    // ---------- СТАРТ ----------
+    function hideSelection() { selectionDiv.style.display = 'none'; }
+
+    // Game over экран
+    document.getElementById('gameoverSpectate').addEventListener('click', spectate);
+
+    // ---------- ИНИЦИАЛИЗАЦИЯ ----------
     vkBridge.send('VKWebAppInit')
       .then(() => vkBridge.send('VKWebAppGetUserInfo'))
       .then(data => {
         currentPlayer.id = data.id;
         updateInfo(`Привет, ${data.first_name}!`);
-        return fetch(`${SERVER_URL}/join`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: data.id })
-        });
+        return fetch(`${SERVER_URL}/join`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId: data.id}) });
       })
       .then(r => r.json())
       .then(state => {
         currentPlayer.color = state.player.color;
-        currentPlayer.spawnX = state.player.spawnX;
-        currentPlayer.spawnY = state.player.spawnY;
-        MAP_W = state.worldW || MAP_W;
-        MAP_H = state.worldH || MAP_H;
+        currentPlayer.spawnX = state.player.spawnX; currentPlayer.spawnY = state.player.spawnY;
+        MAP_W = state.worldW || MAP_W; MAP_H = state.worldH || MAP_H;
         leaderboard = state.leaderboard || [];
         applyServerResponse(state, null);
-        if (!currentPlayer.hashtag && state.availableHashtags) {
-          showHashtagSelection(state.availableHashtags);
+        // Показываем выбор, если нет хештега и не зритель
+        if (!currentPlayer.hashtag && !spectating) {
+          // Собираем занятые хештеги
+          const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
+          showSelection(AVAILABLE_HASHTAGS || [], taken);
         }
         resizeCanvas();
-        if (currentPlayer.spawnX !== null) centerOn(currentPlayer.spawnX, currentPlayer.spawnY);
+        if (currentPlayer.spawnX !== null) centerOnMyCells();
       })
-      .catch(err => {
-        updateInfo('Ошибка: ' + err);
-        console.error(err);
-      });
+      .catch(err => { updateInfo('Ошибка: '+err); console.error(err); });
 
-    setInterval(fetchState, 10_000);
+    setInterval(fetchState, 10000);
     resizeCanvas();
     drawMap();
+
+    // Список доступных хештегов (нужен на клиенте для отображения)
+    const AVAILABLE_HASHTAGS = [
+      'Azur_lane', 'Girls_Frontline', 'Arknights', 'Fate',
+      'Genshin_Impact', 'Hololive', 'Blue_Archive', 'Uma_Musume',
+      'Honkai_Impact', 'Princess_Connect', 'ZenlessZoneZero', 'NIKKE',
+      'HonkaiStarRail', 'WutheringWaves', 'BrownDust2', 'Neverness_to_Everness'
+    ];
   </script>
 </body>
 </html>
