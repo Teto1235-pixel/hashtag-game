@@ -11,9 +11,7 @@
     #info { position:absolute; top:10px; left:10px; z-index:10; background:rgba(255,255,255,0.9); padding:4px 8px; border-radius:4px; }
     #legend { position:absolute; bottom:20px; left:20px; z-index:10; background:rgba(255,255,255,0.9); padding:8px 12px; border-radius:8px; display:none; align-items:center; gap:8px; }
     #legendColor { width:20px; height:20px; border:1px solid #333; }
-    #menuBtn, #findMeBtn { position:absolute; bottom:20px; z-index:10; background:rgba(255,255,255,0.9); border:1px solid #ccc; padding:8px 12px; border-radius:8px; font-size:16px; cursor:pointer; }
-    #menuBtn { right:20px; }
-    #findMeBtn { right:80px; display:none; }
+    #menuBtn { position:absolute; bottom:20px; right:20px; z-index:10; background:rgba(255,255,255,0.9); border:1px solid #ccc; padding:8px 12px; border-radius:8px; font-size:16px; cursor:pointer; display:none; }
     #leaderboard { position:absolute; top:10px; right:10px; z-index:10; background:rgba(0,0,0,0.5); color:white; padding:8px 12px; border-radius:8px; max-width:200px; font-size:12px; display:none; }
     .leader-item { display:flex; align-items:center; margin-bottom:4px; }
     .leader-color { width:10px; height:10px; margin-right:5px; border:1px solid #fff; }
@@ -35,7 +33,6 @@
     <span id="legendHashtag"></span>
   </div>
   <button id="menuBtn" title="Меню">⚙️</button>
-  <button id="findMeBtn" title="Найти себя">📍</button>
   <div id="leaderboard"></div>
   <div id="menuPanel">
     <p>Вы играете за: <strong><span id="menuHashtag"></span></strong></p>
@@ -69,7 +66,7 @@
   <script>
     // ---------- НАСТРОЙКИ ----------
     const CELL_SIZE = 8;
-    let MAP_W = 320;   // 16:9
+    let MAP_W = 320;
     let MAP_H = 180;
     const SERVER_URL = 'https://here-vacation-mistress-region.trycloudflare.com'; // замените
 
@@ -80,7 +77,6 @@
       const container = document.getElementById('canvasContainer');
       canvas.width = container.clientWidth;
       canvas.height = container.clientHeight;
-      clampView();
       drawMap();
     }
     window.addEventListener('resize', resizeCanvas);
@@ -98,7 +94,6 @@
     const MIN_ZOOM = 0.3, MAX_ZOOM = 5;
     let spectating = false;
 
-    // UI элементы
     const attackPanel = document.getElementById('attackPanel');
     const powerSlider = document.getElementById('powerSlider');
     const powerValue = document.getElementById('powerValue');
@@ -110,14 +105,12 @@
     const selectionDiv = document.getElementById('selection');
     const gameoverDiv = document.getElementById('gameover');
     const menuBtn = document.getElementById('menuBtn');
-    const findMeBtn = document.getElementById('findMeBtn');
     const menuPanel = document.getElementById('menuPanel');
     const menuHashtag = document.getElementById('menuHashtag');
     const menuCanChange = document.getElementById('menuCanChange');
     const changeHashtagBtn = document.getElementById('changeHashtagBtn');
-
     let selectedTarget = null;
-    let clickTarget = null; // запоминаем цель при mousedown
+    let clickTarget = null; // цель, запомненная при mousedown
 
     document.addEventListener('gesturestart', e => e.preventDefault());
     document.addEventListener('gesturechange', e => e.preventDefault());
@@ -183,23 +176,7 @@
       return bestCell;
     }
 
-    function clampView() {
-      const worldWidth = MAP_W * CELL_SIZE;
-      const worldHeight = MAP_H * CELL_SIZE;
-      const viewW = canvas.width / zoom;
-      const viewH = canvas.height / zoom;
-      // Не даём уйти за левый/верхний край
-      if (viewX < 0) viewX = 0;
-      if (viewY < 0) viewY = 0;
-      // Не даём уйти за правый/нижний край
-      if (viewX + viewW > worldWidth) viewX = worldWidth - viewW;
-      if (viewY + viewH > worldHeight) viewY = worldHeight - viewH;
-      // Если видимая область больше мира — центрируем
-      if (viewW >= worldWidth) viewX = (worldWidth - viewW) / 2;
-      if (viewH >= worldHeight) viewY = (worldHeight - viewH) / 2;
-    }
-
-    // ---------- КОНВЕРТАЦИЯ КООРДИНАТ ----------
+    // Конвертация экранных координат в игровые
     function screenToWorld(sx, sy) {
       const rect = canvas.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return { x: -1, y: -1 };
@@ -213,14 +190,13 @@
       };
     }
 
-    // ---------- ПЕРЕМЕЩЕНИЕ И ЗУМ (С МЁРТВОЙ ЗОНОЙ) ----------
-    const DRAG_THRESHOLD = 4; // пикселей, чтобы игнорировать дрожание мыши
+    // ---------- УПРАВЛЕНИЕ КАМЕРОЙ (СВОБОДНОЕ) ----------
+    const DRAG_THRESHOLD = 4; // пикселей мёртвой зоны
     let isDragging = false, hasMoved = false;
     let dragStartX, dragStartY, dragStartViewX, dragStartViewY;
 
     canvas.addEventListener('mousedown', e => {
       if (e.button !== 0) return;
-      // Если идёт анимация или режим наблюдения — не мешаем, но drag разрешаем
       isDragging = true;
       hasMoved = false;
       dragStartX = e.clientX;
@@ -229,13 +205,9 @@
       dragStartViewY = viewY;
       canvas.style.cursor = 'grabbing';
 
-      // Запоминаем мировую цель для возможной атаки
+      // Запоминаем игровую клетку под курсором ДО любого движения
       const {x, y} = screenToWorld(e.clientX, e.clientY);
-      if (x >= 0 && x < MAP_W && y >= 0 && y < MAP_H) {
-        clickTarget = { x, y };
-      } else {
-        clickTarget = null;
-      }
+      clickTarget = (x >= 0 && x < MAP_W && y >= 0 && y < MAP_H) ? { x, y } : null;
       e.preventDefault();
     });
 
@@ -251,7 +223,7 @@
       const scaleY = canvas.height / (rect.height || 1);
       viewX = dragStartViewX - (dx * scaleX) / zoom;
       viewY = dragStartViewY - (dy * scaleY) / zoom;
-      clampView();
+      // Без ограничений – свободное перемещение
       drawMap();
     });
 
@@ -275,12 +247,11 @@
         viewX = worldX * newZoom - mx;
         viewY = worldY * newZoom - my;
         zoom = newZoom;
-        clampView();
         drawMap();
       }
     });
 
-    // ---------- ТАЧ-УПРАВЛЕНИЕ С ПОРОГОМ ----------
+    // Тач-управление (тоже с мёртвой зоной)
     let lastTouches = null;
     canvas.addEventListener('touchstart', e => {
       e.preventDefault();
@@ -292,7 +263,6 @@
         dragStartY = t[0].clientY;
         dragStartViewX = viewX;
         dragStartViewY = viewY;
-        // Запоминаем цель
         const {x, y} = screenToWorld(t[0].clientX, t[0].clientY);
         clickTarget = (x >= 0 && x < MAP_W && y >= 0 && y < MAP_H) ? { x, y } : null;
       } else if (t.length === 2) {
@@ -319,7 +289,6 @@
         const scaleY = canvas.height / (rect.height || 1);
         viewX = dragStartViewX - (dx * scaleX) / zoom;
         viewY = dragStartViewY - (dy * scaleY) / zoom;
-        clampView();
         drawMap();
       } else if (t.length === 2 && lastTouches) {
         const newDist = Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
@@ -336,7 +305,6 @@
         viewX = worldX * zoom - cx;
         viewY = worldY * zoom - cy;
         lastTouches = { dist: newDist, cx: lastTouches.cx, cy: lastTouches.cy, viewX, viewY, zoom };
-        clampView();
         drawMap();
       }
     });
@@ -345,6 +313,7 @@
       if (e.touches.length === 0) {
         isDragging = false;
         lastTouches = null;
+        // Если не было перетаскивания и есть цель — пытаемся атаковать
         if (!hasMoved && clickTarget && !animating && !spectating && currentPlayer.hashtag) {
           const {x, y} = clickTarget;
           if (adjacentSet.has(`${x},${y}`)) {
@@ -356,7 +325,7 @@
       }
     });
 
-    // ---------- АТАКА ПО КЛИКУ (использует clickTarget) ----------
+    // ---------- КЛИК ДЛЯ АТАКИ (использует запомненную цель) ----------
     canvas.addEventListener('click', e => {
       if (hasMoved || animating || spectating) return;
       if (!currentPlayer.hashtag) return;
@@ -371,7 +340,7 @@
       clickTarget = null;
     });
 
-    // Двойной клик — центрирование на ближайшей клетке игрока
+    // Двойной клик — центрироваться на ближайшей своей клетке (опционально)
     canvas.addEventListener('dblclick', e => {
       if (!currentPlayer.id || !currentPlayer.hashtag) return;
       const rect = canvas.getBoundingClientRect();
@@ -385,22 +354,8 @@
       if (closest) {
         viewX = closest.worldX * zoom - canvas.width / 2;
         viewY = closest.worldY * zoom - canvas.height / 2;
-        clampView();
         drawMap();
       }
-    });
-
-    // Кнопка "Найти себя"
-    findMeBtn.addEventListener('click', () => {
-      if (!currentPlayer.id || !currentPlayer.hashtag) return;
-      const bounds = getTerritoryBounds(currentPlayer.id);
-      if (bounds.count === 0) return;
-      const centerWorldX = (bounds.minX + bounds.maxX) / 2 * CELL_SIZE + CELL_SIZE / 2;
-      const centerWorldY = (bounds.minY + bounds.maxY) / 2 * CELL_SIZE + CELL_SIZE / 2;
-      viewX = centerWorldX * zoom - canvas.width / 2;
-      viewY = centerWorldY * zoom - canvas.height / 2;
-      clampView();
-      drawMap();
     });
 
     // ---------- ПАНЕЛЬ АТАКИ ----------
@@ -607,7 +562,7 @@
       ctx.textAlign = 'start';
       ctx.restore();
 
-      // Стрелка-указатель по центру внизу
+      // Указатель направления на свои клетки (внизу по центру)
       if (currentPlayer.id && currentPlayer.hashtag) {
         const arrowX = canvas.width / 2;
         const arrowY = canvas.height - 60;
@@ -642,11 +597,9 @@
         legendColor.style.backgroundColor = currentPlayer.color;
         legendHashtag.textContent = '#' + currentPlayer.hashtag;
         menuBtn.style.display = 'block';
-        findMeBtn.style.display = 'block';
       } else {
         legend.style.display = 'none';
         menuBtn.style.display = 'none';
-        findMeBtn.style.display = 'none';
       }
       updateLeaderboard();
     }
