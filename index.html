@@ -5,8 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>Hashtag Territory</title>
   <style>
-    body { margin: 0; padding: 0; background: #222; font-family: monospace; overflow: hidden; touch-action: manipulation; }
-    #canvasContainer { width: 100%; height: 100vh; display: flex; justify-content: center; align-items: center; }
+    body {
+      margin: 0; padding: 0; background: #222;
+      font-family: 'Courier New', monospace;
+      overflow: hidden; touch-action: manipulation;
+    }
+    #canvasContainer {
+      width: 100%; height: 100vh;
+      display: flex; justify-content: center; align-items: center;
+    }
     canvas { display: block; max-width: 100%; max-height: 100%; touch-action: none; }
     #info { position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(255,255,255,0.9); padding: 4px 8px; border-radius: 4px; }
     #legend { position: absolute; bottom: 20px; left: 20px; z-index: 10; background: rgba(255,255,255,0.9); padding: 8px 12px; border-radius: 8px; display: none; align-items: center; gap: 8px; }
@@ -19,7 +26,7 @@
     .leader-cells { margin-left: 5px; }
     #selection { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border: 1px solid #ccc; padding: 20px; z-index: 20; max-height: 80vh; overflow-y: auto; }
     #attackPanel { display: none; position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: white; border: 1px solid #ccc; padding: 15px; z-index: 20; text-align: center; }
-    button { margin: 5px; padding: 8px 12px; cursor: pointer; font-family: monospace; }
+    button { margin: 5px; padding: 8px 12px; cursor: pointer; font-family: 'Courier New', monospace; }
     input[type=range] { width: 200px; }
   </style>
 </head>
@@ -50,21 +57,18 @@
   <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
   <script>
     // ---------- НАСТРОЙКИ ----------
-    const CELL_SIZE = 6;
+    const CELL_SIZE = 8;          // немного крупнее для читаемости
     let MAP_W = 200;
     let MAP_H = 200;
-    const SERVER_URL = 'https://here-vacation-mistress-region.trycloudflare.com'; // ваш адрес
+    const SERVER_URL = 'https://your-tunnel-url.ngrok.io'; // замените
 
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
     function resizeCanvas() {
       const container = document.getElementById('canvasContainer');
-      const w = container.clientWidth;
-      const h = container.clientHeight;
-      if (w === 0 || h === 0) return;
-      canvas.width = w;
-      canvas.height = h;
+      canvas.width = container.clientWidth;
+      canvas.height = container.clientHeight;
       clampCamera();
       drawMap();
     }
@@ -72,28 +76,21 @@
 
     // ---------- СОСТОЯНИЕ ИГРЫ ----------
     const currentPlayer = {
-      id: null,
-      likes: 0,
-      color: '#cccccc',
-      hashtag: null,
-      spawnX: 0,
-      spawnY: 0
+      id: null, likes: 0, color: '#cccccc', hashtag: null, spawnX: 0, spawnY: 0
     };
     let map = Array(MAP_H).fill(null).map(() => Array(MAP_W).fill().map(() => ({ ownerId: null, hashtag: '' })));
     let playersInfo = {};
     let adjacentSet = new Set();
     let leaderboard = [];
 
-    // Анимация
     let animating = false;
     let animationQueue = [];
     let animationTimer = null;
 
-    // Камера
     let viewX = 0, viewY = 0, zoom = 1;
-    const MIN_ZOOM = 0.5, MAX_ZOOM = 5;
+    const MIN_ZOOM = 0.3, MAX_ZOOM = 5;
 
-    // UI
+    // UI элементы
     const attackPanel = document.getElementById('attackPanel');
     const powerSlider = document.getElementById('powerSlider');
     const powerValue = document.getElementById('powerValue');
@@ -105,35 +102,34 @@
     const leaderboardDiv = document.getElementById('leaderboard');
     let selectedTarget = null;
 
-    // ---------- БЛОКИРОВКА СИСТЕМНОГО ЗУМА ----------
-    document.addEventListener('gesturestart', (e) => e.preventDefault());
-    document.addEventListener('gesturechange', (e) => e.preventDefault());
-    document.addEventListener('gestureend', (e) => e.preventDefault());
+    // Блокировка системного зума
+    document.addEventListener('gesturestart', e => e.preventDefault());
+    document.addEventListener('gesturechange', e => e.preventDefault());
+    document.addEventListener('gestureend', e => e.preventDefault());
 
-    // ---------- ОГРАНИЧЕНИЯ КАМЕРЫ С ЦЕНТРИРОВАНИЕМ ----------
+    // ---------- КАМЕРА С ГИБКИМИ ОГРАНИЧЕНИЯМИ ----------
     function clampCamera() {
-      const canvasW = canvas.width || 1;
-      const canvasH = canvas.height || 1;
       const worldW = MAP_W * CELL_SIZE;
       const worldH = MAP_H * CELL_SIZE;
-      const visibleW = canvasW / zoom;
-      const visibleH = canvasH / zoom;
+      const visibleW = canvas.width / zoom;
+      const visibleH = canvas.height / zoom;
 
-      // Если мир меньше видимой области, центрируем
+      // Если мир меньше видимой области — разрешаем отрицательные значения,
+      // чтобы карта могла центрироваться или смещаться, но не отрываться от краёв.
       if (worldW <= visibleW) {
-        viewX = (worldW - visibleW) / 2; // отрицательное значение, чтобы мир был в центре
+        viewX = Math.max(worldW - visibleW, Math.min(0, viewX));
       } else {
         viewX = Math.max(0, Math.min(viewX, worldW - visibleW));
       }
       if (worldH <= visibleH) {
-        viewY = (worldH - visibleH) / 2;
+        viewY = Math.max(worldH - visibleH, Math.min(0, viewY));
       } else {
         viewY = Math.max(0, Math.min(viewY, worldH - visibleH));
       }
     }
 
     function isValidMap(m) {
-      return Array.isArray(m) && m.length === MAP_H && m[0] && m[0].length === MAP_W;
+      return Array.isArray(m) && m.length === MAP_H && m[0]?.length === MAP_W;
     }
 
     function updateAdjacentSet() {
@@ -141,12 +137,11 @@
       if (!currentPlayer.id) return;
       for (let y = 0; y < MAP_H; y++) {
         for (let x = 0; x < MAP_W; x++) {
-          const cell = map[y][x];
-          if (cell.ownerId !== currentPlayer.id) {
+          if (map[y][x].ownerId !== currentPlayer.id) {
             const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
-            for (const [dx,dy] of dirs) {
+            for (const [dx, dy] of dirs) {
               const nx = x + dx, ny = y + dy;
-              if (nx >=0 && nx < MAP_W && ny >=0 && ny < MAP_H && map[ny][nx].ownerId === currentPlayer.id) {
+              if (nx >= 0 && nx < MAP_W && ny >= 0 && ny < MAP_H && map[ny][nx].ownerId === currentPlayer.id) {
                 adjacentSet.add(`${x},${y}`);
                 break;
               }
@@ -156,7 +151,7 @@
       }
     }
 
-    // ---------- ОТРИСОВКА ----------
+    // ---------- ОТРИСОВКА С ТЕКСТОМ ----------
     function drawMap() {
       if (!isValidMap(map)) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -164,7 +159,7 @@
       ctx.translate(-viewX, -viewY);
       ctx.scale(zoom, zoom);
 
-      // Фон мира (теперь весь канвас залит белым, мир центрирован)
+      // Фон мира
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, MAP_W * CELL_SIZE, MAP_H * CELL_SIZE);
 
@@ -185,20 +180,20 @@
       // Сетка
       ctx.strokeStyle = '#e0e0e0';
       ctx.lineWidth = 0.3 / zoom;
-      for (let y = 0; y <= MAP_H; y++) {
+      for (let i = 0; i <= MAP_H; i++) {
         ctx.beginPath();
-        ctx.moveTo(0, y * CELL_SIZE);
-        ctx.lineTo(MAP_W * CELL_SIZE, y * CELL_SIZE);
+        ctx.moveTo(0, i * CELL_SIZE);
+        ctx.lineTo(MAP_W * CELL_SIZE, i * CELL_SIZE);
         ctx.stroke();
       }
-      for (let x = 0; x <= MAP_W; x++) {
+      for (let i = 0; i <= MAP_W; i++) {
         ctx.beginPath();
-        ctx.moveTo(x * CELL_SIZE, 0);
-        ctx.lineTo(x * CELL_SIZE, MAP_H * CELL_SIZE);
+        ctx.moveTo(i * CELL_SIZE, 0);
+        ctx.lineTo(i * CELL_SIZE, MAP_H * CELL_SIZE);
         ctx.stroke();
       }
 
-      // Подсветка соседних клеток
+      // Подсветка соседей
       if (!animating && currentPlayer.id && adjacentSet.size > 0) {
         ctx.strokeStyle = '#FFD700';
         ctx.lineWidth = 1.5 / zoom;
@@ -206,6 +201,24 @@
           const [cx, cy] = coord.split(',').map(Number);
           ctx.strokeRect(cx * CELL_SIZE, cy * CELL_SIZE, CELL_SIZE, CELL_SIZE);
         });
+      }
+
+      // Полупрозрачные названия хештегов на своих клетках
+      if (currentPlayer.id && currentPlayer.hashtag) {
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        // Размер шрифта зависит от клетки и масштаба: базовая высота = CELL_SIZE * 0.6
+        const fontSize = Math.max(1, CELL_SIZE * 0.55);
+        ctx.font = `${fontSize}px "Courier New", monospace`;
+        ctx.textBaseline = 'bottom';
+        for (let y = 0; y < MAP_H; y++) {
+          for (let x = 0; x < MAP_W; x++) {
+            const cell = map[y][x];
+            if (cell.ownerId === currentPlayer.id) {
+              const tag = cell.hashtag || currentPlayer.hashtag;
+              ctx.fillText(tag, x * CELL_SIZE + 1, (y + 1) * CELL_SIZE - 1);
+            }
+          }
+        }
       }
 
       ctx.restore();
@@ -221,7 +234,6 @@
         homeBtn.style.display = 'none';
       }
 
-      // Топ-10
       updateLeaderboard();
     }
 
@@ -232,7 +244,7 @@
       }
       leaderboardDiv.style.display = 'block';
       let html = '<strong>Топ-10</strong>';
-      leaderboard.forEach((entry, i) => {
+      leaderboard.forEach(entry => {
         html += `<div class="leader-item">
           <div class="leader-color" style="background:${entry.color}"></div>
           <span class="leader-tag">#${entry.hashtag}</span>
@@ -246,9 +258,9 @@
       document.getElementById('info').textContent = text;
     }
 
-    // ---------- АНИМАЦИЯ ЗАХВАТА ----------
-    function animateCapture(capturedCells, serverMap) {
-      if (capturedCells.length === 0) {
+    // Анимация захвата
+    function animateCapture(cells, serverMap) {
+      if (!cells.length) {
         map = serverMap;
         updateAdjacentSet();
         drawMap();
@@ -257,11 +269,10 @@
         return;
       }
       animating = true;
-      animationQueue = [...capturedCells];
+      animationQueue = [...cells];
       map = serverMap;
-
       function step() {
-        if (animationQueue.length === 0) {
+        if (!animationQueue.length) {
           animating = false;
           updateAdjacentSet();
           drawMap();
@@ -275,18 +286,7 @@
       step();
     }
 
-    // ---------- ЦЕНТРИРОВАНИЕ КАМЕРЫ ----------
-    function centerOn(worldX, worldY) {
-      const canvasW = canvas.width || 1;
-      const canvasH = canvas.height || 1;
-      const targetWorldX = worldX * CELL_SIZE + CELL_SIZE/2;
-      const targetWorldY = worldY * CELL_SIZE + CELL_SIZE/2;
-      viewX = targetWorldX - canvasW / (2 * zoom);
-      viewY = targetWorldY - canvasH / (2 * zoom);
-      clampCamera();
-      drawMap();
-    }
-
+    // Центрирование на своих клетках
     function centerOnMyCells() {
       let sumX = 0, sumY = 0, count = 0;
       for (let y = 0; y < MAP_H; y++) {
@@ -298,31 +298,40 @@
           }
         }
       }
-      if (count === 0) {
-        centerOn(currentPlayer.spawnX, currentPlayer.spawnY);
-      } else {
+      if (count > 0) {
         centerOn(Math.floor(sumX / count), Math.floor(sumY / count));
+      } else {
+        centerOn(currentPlayer.spawnX, currentPlayer.spawnY);
       }
+    }
+
+    function centerOn(worldX, worldY) {
+      const targetWorldX = worldX * CELL_SIZE + CELL_SIZE/2;
+      const targetWorldY = worldY * CELL_SIZE + CELL_SIZE/2;
+      viewX = targetWorldX - canvas.width / (2 * zoom);
+      viewY = targetWorldY - canvas.height / (2 * zoom);
+      clampCamera();
+      drawMap();
     }
 
     homeBtn.addEventListener('click', centerOnMyCells);
 
-    // ---------- КОНВЕРТАЦИЯ КООРДИНАТ ----------
-    function screenToWorld(screenX, screenY) {
+    // Экран -> мировые координаты
+    function screenToWorld(sx, sy) {
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / rect.width;
       const scaleY = canvas.height / rect.height;
-      const canvasX = (screenX - rect.left) * scaleX;
-      const canvasY = (screenY - rect.top) * scaleY;
-      const worldX = (canvasX + viewX) / zoom;
-      const worldY = (canvasY + viewY) / zoom;
-      return { x: Math.floor(worldX / CELL_SIZE), y: Math.floor(worldY / CELL_SIZE) };
+      const cx = (sx - rect.left) * scaleX;
+      const cy = (sy - rect.top) * scaleY;
+      return {
+        x: Math.floor((cx + viewX) / zoom / CELL_SIZE),
+        y: Math.floor((cy + viewY) / zoom / CELL_SIZE)
+      };
     }
 
-    // ---------- УПРАВЛЕНИЕ КАМЕРОЙ ----------
+    // ---------- DRAG & ZOOM ----------
     let isDragging = false, dragStartX, dragStartY, dragStartViewX, dragStartViewY;
-
-    canvas.addEventListener('mousedown', (e) => {
+    canvas.addEventListener('mousedown', e => {
       if (e.button === 0 && !e.ctrlKey) {
         isDragging = true;
         dragStartX = e.clientX;
@@ -333,25 +342,18 @@
         e.preventDefault();
       }
     });
-
-    window.addEventListener('mousemove', (e) => {
+    window.addEventListener('mousemove', e => {
       if (!isDragging) return;
-      const dx = e.clientX - dragStartX;
-      const dy = e.clientY - dragStartY;
-      viewX = dragStartViewX - dx / zoom;
-      viewY = dragStartViewY - dy / zoom;
+      viewX = dragStartViewX - (e.clientX - dragStartX) / zoom;
+      viewY = dragStartViewY - (e.clientY - dragStartY) / zoom;
       clampCamera();
       drawMap();
     });
-
     window.addEventListener('mouseup', () => {
-      if (isDragging) {
-        isDragging = false;
-        canvas.style.cursor = 'default';
-      }
+      isDragging = false;
+      canvas.style.cursor = 'default';
     });
-
-    canvas.addEventListener('wheel', (e) => {
+    canvas.addEventListener('wheel', e => {
       e.preventDefault();
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / rect.width;
@@ -360,8 +362,7 @@
       const mouseCanvasY = (e.clientY - rect.top) * scaleY;
       const worldX = (mouseCanvasX + viewX) / zoom;
       const worldY = (mouseCanvasY + viewY) / zoom;
-      const delta = e.deltaY > 0 ? 0.9 : 1.1;
-      const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * delta));
+      const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * (e.deltaY > 0 ? 0.9 : 1.1)));
       if (newZoom !== zoom) {
         viewX = worldX * newZoom - mouseCanvasX;
         viewY = worldY * newZoom - mouseCanvasY;
@@ -371,9 +372,9 @@
       }
     });
 
-    // Тач-события
+    // Тач-управление
     let lastTouches = null;
-    canvas.addEventListener('touchstart', (e) => {
+    canvas.addEventListener('touchstart', e => {
       e.preventDefault();
       const touches = e.touches;
       if (touches.length === 1) {
@@ -386,71 +387,55 @@
         isDragging = false;
         lastTouches = {
           dist: Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY),
-          centerX: (touches[0].clientX + touches[1].clientX) / 2,
-          centerY: (touches[0].clientY + touches[1].clientY) / 2,
+          cx: (touches[0].clientX + touches[1].clientX)/2,
+          cy: (touches[0].clientY + touches[1].clientY)/2,
           viewX, viewY, zoom
         };
       }
     });
-
-    canvas.addEventListener('touchmove', (e) => {
+    canvas.addEventListener('touchmove', e => {
       e.preventDefault();
       const touches = e.touches;
       if (touches.length === 1 && isDragging) {
-        const dx = touches[0].clientX - dragStartX;
-        const dy = touches[0].clientY - dragStartY;
-        viewX = dragStartViewX - dx / zoom;
-        viewY = dragStartViewY - dy / zoom;
+        viewX = dragStartViewX - (touches[0].clientX - dragStartX) / zoom;
+        viewY = dragStartViewY - (touches[0].clientY - dragStartY) / zoom;
         clampCamera();
         drawMap();
       } else if (touches.length === 2 && lastTouches) {
         const newDist = Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
         const scale = newDist / lastTouches.dist;
         const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, lastTouches.zoom * scale));
-        const centerX = (touches[0].clientX + touches[1].clientX) / 2;
-        const centerY = (touches[0].clientY + touches[1].clientY) / 2;
         const rect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
-        const canvasCX = (centerX - rect.left) * scaleX;
-        const canvasCY = (centerY - rect.top) * scaleY;
+        const canvasCX = (lastTouches.cx - rect.left) * scaleX;
+        const canvasCY = (lastTouches.cy - rect.top) * scaleY;
         const worldX = (canvasCX + lastTouches.viewX) / lastTouches.zoom;
         const worldY = (canvasCY + lastTouches.viewY) / lastTouches.zoom;
         zoom = newZoom;
         viewX = worldX * zoom - canvasCX;
         viewY = worldY * zoom - canvasCY;
-        lastTouches.dist = newDist;
-        lastTouches.viewX = viewX;
-        lastTouches.viewY = viewY;
-        lastTouches.zoom = zoom;
+        lastTouches = { dist: newDist, cx: lastTouches.cx, cy: lastTouches.cy, viewX, viewY, zoom };
         clampCamera();
         drawMap();
       }
     });
-
-    canvas.addEventListener('touchend', (e) => {
-      if (e.touches.length === 0) {
-        isDragging = false;
-        lastTouches = null;
-      }
+    canvas.addEventListener('touchend', e => {
+      if (e.touches.length === 0) { isDragging = false; lastTouches = null; }
     });
 
-    // ---------- КЛИК (АТАКА) ----------
-    canvas.addEventListener('click', (e) => {
+    // ---------- АТАКА ----------
+    canvas.addEventListener('click', e => {
       if (isDragging || animating) return;
       if (!currentPlayer.hashtag) return;
-
-      const world = screenToWorld(e.clientX, e.clientY);
-      if (world.x < 0 || world.x >= MAP_W || world.y < 0 || world.y >= MAP_H) return;
-
-      if (!adjacentSet.has(`${world.x},${world.y}`)) {
+      const { x, y } = screenToWorld(e.clientX, e.clientY);
+      if (x < 0 || x >= MAP_W || y < 0 || y >= MAP_H) return;
+      if (!adjacentSet.has(`${x},${y}`)) {
         updateInfo('Можно атаковать только подсвеченные клетки');
         return;
       }
-
-      showAttackPanel(world.x, world.y);
+      showAttackPanel(x, y);
     });
 
-    // ---------- ПАНЕЛЬ АТАКИ ----------
     function showAttackPanel(x, y) {
       selectedTarget = { x, y };
       targetCoords.textContent = `${x}, ${y}`;
@@ -459,30 +444,23 @@
       powerValue.textContent = '1';
       attackPanel.style.display = 'block';
     }
-
     function hideAttackPanel() {
       attackPanel.style.display = 'none';
       selectedTarget = null;
     }
-
-    powerSlider.addEventListener('input', () => {
-      powerValue.textContent = powerSlider.value;
-    });
-
+    powerSlider.addEventListener('input', () => powerValue.textContent = powerSlider.value);
     document.getElementById('attackBtn').addEventListener('click', () => {
       if (!selectedTarget || animating) return;
-      const amount = Number(powerSlider.value);
-      attackCell(selectedTarget.x, selectedTarget.y, amount);
+      attackCell(selectedTarget.x, selectedTarget.y, Number(powerSlider.value));
       hideAttackPanel();
     });
-
     document.getElementById('cancelAttackBtn').addEventListener('click', hideAttackPanel);
 
-    // ---------- ЗАПРОСЫ К СЕРВЕРУ ----------
+    // ---------- СЕРВЕРНЫЕ ЗАПРОСЫ ----------
     function applyServerResponse(data, capturedCells) {
       if (data.player) {
         currentPlayer.likes = data.player.likes;
-        if (currentPlayer.hashtag === null) currentPlayer.hashtag = data.player.hashtag;
+        if (!currentPlayer.hashtag) currentPlayer.hashtag = data.player.hashtag;
         if (data.player.spawnX !== undefined) {
           currentPlayer.spawnX = data.player.spawnX;
           currentPlayer.spawnY = data.player.spawnY;
@@ -493,7 +471,7 @@
       if (data.worldH) MAP_H = data.worldH;
       if (data.leaderboard) leaderboard = data.leaderboard;
 
-      if (capturedCells && capturedCells.length > 0) {
+      if (capturedCells?.length) {
         animateCapture(capturedCells, data.map);
       } else {
         if (isValidMap(data.map)) map = data.map;
@@ -518,23 +496,20 @@
           applyServerResponse(res, null);
           hideHashtagSelection();
           centerOn(currentPlayer.spawnX, currentPlayer.spawnY);
-        } else {
-          alert(res.error);
-        }
+        } else alert(res.error);
       });
     }
 
-    function attackCell(gridX, gridY, amount) {
+    function attackCell(x, y, amount) {
       fetch(`${SERVER_URL}/attack`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentPlayer.id, x: gridX, y: gridY, amount })
+        body: JSON.stringify({ userId: currentPlayer.id, x, y, amount })
       })
       .then(r => r.json())
       .then(res => {
-        if (res.success) {
-          applyServerResponse(res, res.capturedCells);
-        } else {
+        if (res.success) applyServerResponse(res, res.capturedCells);
+        else {
           updateInfo(`Ошибка: ${res.error}`);
           applyServerResponse(res, null);
         }
@@ -563,12 +538,11 @@
       });
       document.getElementById('selection').style.display = 'block';
     }
-
     function hideHashtagSelection() {
       document.getElementById('selection').style.display = 'none';
     }
 
-    // ---------- ИНИЦИАЛИЗАЦИЯ ----------
+    // ---------- СТАРТ ----------
     vkBridge.send('VKWebAppInit')
       .then(() => vkBridge.send('VKWebAppGetUserInfo'))
       .then(data => {
@@ -593,14 +567,11 @@
           showHashtagSelection(state.availableHashtags);
         }
         resizeCanvas();
-        // Центрируемся на точку спауна, если она уже известна
-        if (currentPlayer.spawnX !== null) {
-          centerOn(currentPlayer.spawnX, currentPlayer.spawnY);
-        }
+        if (currentPlayer.spawnX !== null) centerOn(currentPlayer.spawnX, currentPlayer.spawnY);
       })
-      .catch(error => {
-        updateInfo('Ошибка: ' + error);
-        console.error(error);
+      .catch(err => {
+        updateInfo('Ошибка: ' + err);
+        console.error(err);
       });
 
     setInterval(fetchState, 10_000);
