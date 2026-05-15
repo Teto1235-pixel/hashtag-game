@@ -12,6 +12,11 @@
     #legend { position: absolute; bottom: 20px; left: 20px; z-index: 10; background: rgba(255,255,255,0.9); padding: 8px 12px; border-radius: 8px; display: none; align-items: center; gap: 8px; }
     #legendColor { width: 20px; height: 20px; border: 1px solid #333; }
     #homeBtn { position: absolute; bottom: 20px; right: 20px; z-index: 10; background: rgba(255,255,255,0.9); border: 1px solid #ccc; padding: 8px 12px; border-radius: 8px; font-size: 16px; cursor: pointer; display: none; }
+    #leaderboard { position: absolute; top: 10px; right: 10px; z-index: 10; background: rgba(0,0,0,0.5); color: white; padding: 8px 12px; border-radius: 8px; max-width: 200px; font-size: 12px; display: none; }
+    .leader-item { display: flex; align-items: center; margin-bottom: 4px; }
+    .leader-color { width: 10px; height: 10px; margin-right: 5px; border: 1px solid #fff; }
+    .leader-tag { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .leader-cells { margin-left: 5px; }
     #selection { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border: 1px solid #ccc; padding: 20px; z-index: 20; max-height: 80vh; overflow-y: auto; }
     #attackPanel { display: none; position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: white; border: 1px solid #ccc; padding: 15px; z-index: 20; text-align: center; }
     button { margin: 5px; padding: 8px 12px; cursor: pointer; font-family: monospace; }
@@ -25,6 +30,7 @@
     <span id="legendHashtag"></span>
   </div>
   <button id="homeBtn" title="Мои владения">🏠 Мои клетки</button>
+  <div id="leaderboard"></div>
   <div id="selection">
     <h3>Выберите хештег</h3>
     <div id="hashtagList"></div>
@@ -45,14 +51,13 @@
   <script>
     // ---------- НАСТРОЙКИ ----------
     const CELL_SIZE = 6;
-    let MAP_W = 200;   // будет обновляться с сервера
+    let MAP_W = 200;
     let MAP_H = 200;
     const SERVER_URL = 'https://here-vacation-mistress-region.trycloudflare.com'; // ваш адрес
 
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
-    // Размеры канваса (будут подстраиваться)
     function resizeCanvas() {
       const container = document.getElementById('canvasContainer');
       const w = container.clientWidth;
@@ -77,6 +82,7 @@
     let map = Array(MAP_H).fill(null).map(() => Array(MAP_W).fill().map(() => ({ ownerId: null, hashtag: '' })));
     let playersInfo = {};
     let adjacentSet = new Set();
+    let leaderboard = [];
 
     // Анимация
     let animating = false;
@@ -96,6 +102,7 @@
     const legendColor = document.getElementById('legendColor');
     const legendHashtag = document.getElementById('legendHashtag');
     const homeBtn = document.getElementById('homeBtn');
+    const leaderboardDiv = document.getElementById('leaderboard');
     let selectedTarget = null;
 
     // ---------- БЛОКИРОВКА СИСТЕМНОГО ЗУМА ----------
@@ -103,7 +110,7 @@
     document.addEventListener('gesturechange', (e) => e.preventDefault());
     document.addEventListener('gestureend', (e) => e.preventDefault());
 
-    // ---------- ОГРАНИЧЕНИЯ КАМЕРЫ ----------
+    // ---------- ОГРАНИЧЕНИЯ КАМЕРЫ С ЦЕНТРИРОВАНИЕМ ----------
     function clampCamera() {
       const canvasW = canvas.width || 1;
       const canvasH = canvas.height || 1;
@@ -111,10 +118,18 @@
       const worldH = MAP_H * CELL_SIZE;
       const visibleW = canvasW / zoom;
       const visibleH = canvasH / zoom;
-      const maxViewX = Math.max(0, worldW - visibleW);
-      const maxViewY = Math.max(0, worldH - visibleH);
-      viewX = Math.max(0, Math.min(viewX, maxViewX));
-      viewY = Math.max(0, Math.min(viewY, maxViewY));
+
+      // Если мир меньше видимой области, центрируем
+      if (worldW <= visibleW) {
+        viewX = (worldW - visibleW) / 2; // отрицательное значение, чтобы мир был в центре
+      } else {
+        viewX = Math.max(0, Math.min(viewX, worldW - visibleW));
+      }
+      if (worldH <= visibleH) {
+        viewY = (worldH - visibleH) / 2;
+      } else {
+        viewY = Math.max(0, Math.min(viewY, worldH - visibleH));
+      }
     }
 
     function isValidMap(m) {
@@ -149,7 +164,7 @@
       ctx.translate(-viewX, -viewY);
       ctx.scale(zoom, zoom);
 
-      // Фон мира
+      // Фон мира (теперь весь канвас залит белым, мир центрирован)
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, MAP_W * CELL_SIZE, MAP_H * CELL_SIZE);
 
@@ -205,13 +220,33 @@
         legend.style.display = 'none';
         homeBtn.style.display = 'none';
       }
+
+      // Топ-10
+      updateLeaderboard();
+    }
+
+    function updateLeaderboard() {
+      if (!leaderboard.length) {
+        leaderboardDiv.style.display = 'none';
+        return;
+      }
+      leaderboardDiv.style.display = 'block';
+      let html = '<strong>Топ-10</strong>';
+      leaderboard.forEach((entry, i) => {
+        html += `<div class="leader-item">
+          <div class="leader-color" style="background:${entry.color}"></div>
+          <span class="leader-tag">#${entry.hashtag}</span>
+          <span class="leader-cells">${entry.cells}</span>
+        </div>`;
+      });
+      leaderboardDiv.innerHTML = html;
     }
 
     function updateInfo(text) {
       document.getElementById('info').textContent = text;
     }
 
-    // ---------- АНИМАЦИЯ ЗАХВАТА (медленная) ----------
+    // ---------- АНИМАЦИЯ ЗАХВАТА ----------
     function animateCapture(capturedCells, serverMap) {
       if (capturedCells.length === 0) {
         map = serverMap;
@@ -235,7 +270,7 @@
         }
         drawMap();
         animationQueue.shift();
-        animationTimer = setTimeout(step, 200); // медленно
+        animationTimer = setTimeout(step, 200);
       }
       step();
     }
@@ -253,7 +288,6 @@
     }
 
     function centerOnMyCells() {
-      // Находим все свои клетки и центр масс
       let sumX = 0, sumY = 0, count = 0;
       for (let y = 0; y < MAP_H; y++) {
         for (let x = 0; x < MAP_W; x++) {
@@ -265,7 +299,6 @@
         }
       }
       if (count === 0) {
-        // если нет клеток, центрируемся на точку спауна
         centerOn(currentPlayer.spawnX, currentPlayer.spawnY);
       } else {
         centerOn(Math.floor(sumX / count), Math.floor(sumY / count));
@@ -458,6 +491,7 @@
       if (data.playersInfo) playersInfo = data.playersInfo;
       if (data.worldW) MAP_W = data.worldW;
       if (data.worldH) MAP_H = data.worldH;
+      if (data.leaderboard) leaderboard = data.leaderboard;
 
       if (capturedCells && capturedCells.length > 0) {
         animateCapture(capturedCells, data.map);
@@ -483,7 +517,6 @@
           currentPlayer.spawnY = res.player.spawnY;
           applyServerResponse(res, null);
           hideHashtagSelection();
-          // Центрируемся на точку спауна
           centerOn(currentPlayer.spawnX, currentPlayer.spawnY);
         } else {
           alert(res.error);
@@ -554,11 +587,16 @@
         currentPlayer.spawnY = state.player.spawnY;
         MAP_W = state.worldW || MAP_W;
         MAP_H = state.worldH || MAP_H;
+        leaderboard = state.leaderboard || [];
         applyServerResponse(state, null);
         if (!currentPlayer.hashtag && state.availableHashtags) {
           showHashtagSelection(state.availableHashtags);
         }
-        resizeCanvas(); // подгоняем размер и центрируем
+        resizeCanvas();
+        // Центрируемся на точку спауна, если она уже известна
+        if (currentPlayer.spawnX !== null) {
+          centerOn(currentPlayer.spawnX, currentPlayer.spawnY);
+        }
       })
       .catch(error => {
         updateInfo('Ошибка: ' + error);
