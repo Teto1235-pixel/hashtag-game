@@ -77,7 +77,6 @@
       const container = document.getElementById('canvasContainer');
       canvas.width = container.clientWidth;
       canvas.height = container.clientHeight;
-      clampCamera();      // теперь границы работают
       drawMap();
     }
     window.addEventListener('resize', resizeCanvas);
@@ -118,22 +117,6 @@
     document.addEventListener('gesturechange', e => e.preventDefault());
     document.addEventListener('gestureend', e => e.preventDefault());
     canvas.addEventListener('contextmenu', e => e.preventDefault());
-
-    // ---------- МЯГКИЕ ГРАНИЦЫ КАМЕРЫ ----------
-    function clampCamera() {
-      const worldW = MAP_W * CELL_SIZE;
-      const worldH = MAP_H * CELL_SIZE;
-      const visibleW = canvas.width / zoom;
-      const visibleH = canvas.height / zoom;
-
-      // Разрешаем смещение так, чтобы до 50% видимой области могло выходить за край мира.
-      // Это позволяет подвести край мира к центру экрана.
-      const padX = visibleW * 0.5;
-      const padY = visibleH * 0.5;
-
-      viewX = Math.max(-padX, Math.min(viewX, worldW - visibleW + padX));
-      viewY = Math.max(-padY, Math.min(viewY, worldH - visibleH + padY));
-    }
 
     // ---------- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ----------
     function isValidMap(m) {
@@ -204,7 +187,7 @@
       };
     }
 
-    // ---------- УПРАВЛЕНИЕ КАМЕРОЙ (свободное, но с границами) ----------
+    // ---------- УПРАВЛЕНИЕ КАМЕРОЙ (ПОЛНОСТЬЮ СВОБОДНОЕ) ----------
     const DRAG_THRESHOLD = 4;
     let isDragging = false, hasMoved = false;
     let dragStartX, dragStartY, dragStartViewX, dragStartViewY;
@@ -234,10 +217,9 @@
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / (rect.width || 1);
       const scaleY = canvas.height / (rect.height || 1);
-      // Перетаскивание: 1 пиксель мыши = смещение в мировых координатах на (scaleX / zoom)
+      // Прямое отображение движения мыши в мировые координаты
       viewX = dragStartViewX - dx * scaleX / zoom;
       viewY = dragStartViewY - dy * scaleY / zoom;
-      clampCamera();   // применяем мягкие границы
       drawMap();
     });
 
@@ -261,12 +243,11 @@
         viewX = worldX * newZoom - mx;
         viewY = worldY * newZoom - my;
         zoom = newZoom;
-        clampCamera();
         drawMap();
       }
     });
 
-    // Тач-управление
+    // Тач-управление (свободное)
     let lastTouches = null;
     canvas.addEventListener('touchstart', e => {
       e.preventDefault();
@@ -304,7 +285,6 @@
         const scaleY = canvas.height / (rect.height || 1);
         viewX = dragStartViewX - dx * scaleX / zoom;
         viewY = dragStartViewY - dy * scaleY / zoom;
-        clampCamera();
         drawMap();
       } else if (t.length === 2 && lastTouches) {
         const newDist = Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
@@ -321,7 +301,6 @@
         viewX = worldX * zoom - cx;
         viewY = worldY * zoom - cy;
         lastTouches = { dist: newDist, cx: lastTouches.cx, cy: lastTouches.cy, viewX, viewY, zoom };
-        clampCamera();
         drawMap();
       }
     });
@@ -370,7 +349,6 @@
       if (closest) {
         viewX = closest.worldX * zoom - canvas.width / 2;
         viewY = closest.worldY * zoom - canvas.height / 2;
-        clampCamera();
         drawMap();
       }
     });
@@ -579,7 +557,7 @@
       ctx.textAlign = 'start';
       ctx.restore();
 
-      // Указатель направления
+      // Указатель направления внизу по центру
       if (currentPlayer.id && currentPlayer.hashtag) {
         const arrowX = canvas.width / 2;
         const arrowY = canvas.height - 60;
