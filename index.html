@@ -5,20 +5,39 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>Hashtag Territory</title>
   <style>
-    body { margin:0; padding:0; background:#222; font-family:'Courier New',monospace; overflow:hidden; touch-action:manipulation; }
-    #canvasContainer { width:100%; height:100vh; display:flex; justify-content:center; align-items:center; }
-    canvas { display:block; max-width:100%; max-height:100%; touch-action:none; }
-    #info { position:absolute; top:10px; left:10px; z-index:10; background:rgba(255,255,255,0.9); padding:4px 8px; border-radius:4px; }
-    #legend { position:absolute; bottom:20px; left:20px; z-index:10; background:rgba(255,255,255,0.9); padding:8px 12px; border-radius:8px; display:none; align-items:center; gap:8px; }
+    body {
+      margin: 0; padding: 0; background: #222;
+      font-family: 'Courier New', monospace;
+      overflow: hidden;
+      touch-action: manipulation;
+      /* убираем возможный скролл */
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    }
+    #canvasContainer {
+      width: 100%; height: 100vh;
+      display: flex; justify-content: center; align-items: center;
+    }
+    canvas {
+      display: block;
+      /* убираем max-width/max-height, чтобы канвас растягивался на весь контейнер */
+      width: 100%; height: 100%;
+      touch-action: none;
+    }
+    #info, #legend, #menuBtn, #leaderboard, #menuPanel, #selection, #attackPanel, #gameover {
+      position: absolute; z-index: 10;
+    }
+    #info { top:10px; left:10px; background:rgba(255,255,255,0.9); padding:4px 8px; border-radius:4px; }
+    #legend { bottom:20px; left:20px; background:rgba(255,255,255,0.9); padding:8px 12px; border-radius:8px; display:none; align-items:center; gap:8px; }
     #legendColor { width:20px; height:20px; border:1px solid #333; }
-    #menuBtn { position:absolute; bottom:20px; right:20px; z-index:10; background:rgba(255,255,255,0.9); border:1px solid #ccc; padding:8px 12px; border-radius:8px; font-size:16px; cursor:pointer; display:none; }
-    #leaderboard { position:absolute; top:10px; right:10px; z-index:10; background:rgba(0,0,0,0.5); color:white; padding:8px 12px; border-radius:8px; max-width:200px; font-size:12px; display:none; }
+    #menuBtn { bottom:20px; right:20px; background:rgba(255,255,255,0.9); border:1px solid #ccc; padding:8px 12px; border-radius:8px; font-size:16px; cursor:pointer; display:none; }
+    #leaderboard { top:10px; right:10px; background:rgba(0,0,0,0.5); color:white; padding:8px 12px; border-radius:8px; max-width:200px; font-size:12px; display:none; }
     .leader-item { display:flex; align-items:center; margin-bottom:4px; }
     .leader-color { width:10px; height:10px; margin-right:5px; border:1px solid #fff; }
     .leader-tag { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .leader-cells { margin-left:5px; }
-    #menuPanel { display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:white; border:1px solid #ccc; padding:20px; z-index:20; text-align:center; }
-    #selection { display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:white; border:1px solid #ccc; padding:20px; z-index:20; max-height:80vh; overflow-y:auto; }
+    #menuPanel, #selection { display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:white; border:1px solid #ccc; padding:20px; z-index:20; }
+    #menuPanel { text-align:center; }
+    #selection { max-height:80vh; overflow-y:auto; }
     #selection button.taken { background:#ffcccc; color:#900; cursor:not-allowed; text-decoration:line-through; }
     #attackPanel { display:none; position:absolute; bottom:20px; left:50%; transform:translateX(-50%); background:white; border:1px solid #ccc; padding:15px; z-index:20; text-align:center; }
     #gameover { display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:100; justify-content:center; align-items:center; flex-direction:column; color:white; font-size:24px; }
@@ -66,17 +85,20 @@
   <script>
     // ---------- НАСТРОЙКИ ----------
     const CELL_SIZE = 8;
-    let MAP_W = 320;
+    let MAP_W = 320;   // 16:9
     let MAP_H = 180;
-    const SERVER_URL = 'https://here-vacation-mistress-region.trycloudflare.com'; // замените
+    const SERVER_URL = 'https://your-tunnel-url.ngrok.io'; // замените
 
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
+    // ---------- АДАПТИВНЫЙ РАЗМЕР КАНВАСА ----------
     function resizeCanvas() {
       const container = document.getElementById('canvasContainer');
+      // Берём точные пиксели контейнера
       canvas.width = container.clientWidth;
       canvas.height = container.clientHeight;
+      clampCamera();
       drawMap();
     }
     window.addEventListener('resize', resizeCanvas);
@@ -118,7 +140,21 @@
     document.addEventListener('gestureend', e => e.preventDefault());
     canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-    // ---------- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ----------
+    // ---------- МЯГКИЕ ГРАНИЦЫ (чтобы не потерять карту) ----------
+    function clampCamera() {
+      const worldW = MAP_W * CELL_SIZE;
+      const worldH = MAP_H * CELL_SIZE;
+      const visibleW = canvas.width / zoom;
+      const visibleH = canvas.height / zoom;
+
+      // Разрешаем выходить за край на 50% видимой области
+      const padX = visibleW * 0.5;
+      const padY = visibleH * 0.5;
+
+      viewX = Math.max(-padX, Math.min(viewX, worldW - visibleW + padX));
+      viewY = Math.max(-padY, Math.min(viewY, worldH - visibleH + padY));
+    }
+
     function isValidMap(m) {
       return Array.isArray(m) && m.length === MAP_H && m[0]?.length === MAP_W;
     }
@@ -174,20 +210,24 @@
       return bestCell;
     }
 
+    // ---------- ПРЕОБРАЗОВАНИЕ КООРДИНАТ С УЧЁТОМ АДАПТИВНОСТИ ----------
     function screenToWorld(sx, sy) {
       const rect = canvas.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return { x: -1, y: -1 };
+      // Коэффициенты пересчёта: canvas.width/rect.width учитывает масштаб канваса в CSS
       const scaleX = canvas.width / rect.width;
       const scaleY = canvas.height / rect.height;
-      const cx = (sx - rect.left) * scaleX;
-      const cy = (sy - rect.top) * scaleY;
+      const canvasX = (sx - rect.left) * scaleX;
+      const canvasY = (sy - rect.top) * scaleY;
+      const worldX = (canvasX + viewX) / zoom;
+      const worldY = (canvasY + viewY) / zoom;
       return {
-        x: Math.floor((cx + viewX) / zoom / CELL_SIZE),
-        y: Math.floor((cy + viewY) / zoom / CELL_SIZE)
+        x: Math.floor(worldX / CELL_SIZE),
+        y: Math.floor(worldY / CELL_SIZE)
       };
     }
 
-    // ---------- УПРАВЛЕНИЕ КАМЕРОЙ (ПОЛНОСТЬЮ СВОБОДНОЕ) ----------
+    // ---------- УПРАВЛЕНИЕ КАМЕРОЙ (свободное, но с мягкими границами) ----------
     const DRAG_THRESHOLD = 4;
     let isDragging = false, hasMoved = false;
     let dragStartX, dragStartY, dragStartViewX, dragStartViewY;
@@ -214,12 +254,13 @@
       if (!hasMoved && Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
       hasMoved = true;
 
+      // Учитываем масштабный коэффициент, чтобы движение мыши соответствовало движению мира
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / (rect.width || 1);
       const scaleY = canvas.height / (rect.height || 1);
-      // Прямое отображение движения мыши в мировые координаты
       viewX = dragStartViewX - dx * scaleX / zoom;
       viewY = dragStartViewY - dy * scaleY / zoom;
+      clampCamera();
       drawMap();
     });
 
@@ -243,11 +284,12 @@
         viewX = worldX * newZoom - mx;
         viewY = worldY * newZoom - my;
         zoom = newZoom;
+        clampCamera();
         drawMap();
       }
     });
 
-    // Тач-управление (свободное)
+    // Тач-управление (аналогично с масштабом)
     let lastTouches = null;
     canvas.addEventListener('touchstart', e => {
       e.preventDefault();
@@ -285,6 +327,7 @@
         const scaleY = canvas.height / (rect.height || 1);
         viewX = dragStartViewX - dx * scaleX / zoom;
         viewY = dragStartViewY - dy * scaleY / zoom;
+        clampCamera();
         drawMap();
       } else if (t.length === 2 && lastTouches) {
         const newDist = Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
@@ -301,6 +344,7 @@
         viewX = worldX * zoom - cx;
         viewY = worldY * zoom - cy;
         lastTouches = { dist: newDist, cx: lastTouches.cx, cy: lastTouches.cy, viewX, viewY, zoom };
+        clampCamera();
         drawMap();
       }
     });
@@ -320,7 +364,7 @@
       }
     });
 
-    // ---------- КЛИК ДЛЯ АТАКИ ----------
+    // ---------- КЛИК ----------
     canvas.addEventListener('click', e => {
       if (hasMoved || animating || spectating) return;
       if (!currentPlayer.hashtag) return;
@@ -335,7 +379,6 @@
       clickTarget = null;
     });
 
-    // Двойной клик — центрирование на ближайшей своей клетке
     canvas.addEventListener('dblclick', e => {
       if (!currentPlayer.id || !currentPlayer.hashtag) return;
       const rect = canvas.getBoundingClientRect();
@@ -349,6 +392,7 @@
       if (closest) {
         viewX = closest.worldX * zoom - canvas.width / 2;
         viewY = closest.worldY * zoom - canvas.height / 2;
+        clampCamera();
         drawMap();
       }
     });
@@ -495,7 +539,7 @@
     function hideSelection() { selectionDiv.style.display = 'none'; }
     document.getElementById('gameoverSpectate').addEventListener('click', spectate);
 
-    // ---------- ОТРИСОВКА ----------
+    // ---------- ОТРИСОВКА (без изменений) ----------
     function drawMap() {
       if (!isValidMap(map)) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -557,7 +601,7 @@
       ctx.textAlign = 'start';
       ctx.restore();
 
-      // Указатель направления внизу по центру
+      // Указатель направления
       if (currentPlayer.id && currentPlayer.hashtag) {
         const arrowX = canvas.width / 2;
         const arrowY = canvas.height - 60;
