@@ -11,13 +11,13 @@
     #info { position:absolute; top:10px; left:10px; z-index:10; background:rgba(255,255,255,0.9); padding:4px 8px; border-radius:4px; }
     #legend { position:absolute; bottom:20px; left:20px; z-index:10; background:rgba(255,255,255,0.9); padding:8px 12px; border-radius:8px; display:none; align-items:center; gap:8px; }
     #legendColor { width:20px; height:20px; border:1px solid #333; }
-    #homeBtn { position:absolute; bottom:20px; right:20px; z-index:10; background:rgba(255,255,255,0.9); border:1px solid #ccc; padding:8px 12px; border-radius:8px; font-size:16px; cursor:pointer; display:none; }
+    #bottomRightButtons { position:absolute; bottom:20px; right:20px; z-index:10; display:none; gap:8px; }
+    #homeBtn, #menuBtn { background:rgba(255,255,255,0.9); border:1px solid #ccc; padding:8px 12px; border-radius:8px; font-size:16px; cursor:pointer; }
     #leaderboard { position:absolute; top:10px; right:10px; z-index:10; background:rgba(0,0,0,0.5); color:white; padding:8px 12px; border-radius:8px; max-width:200px; font-size:12px; display:none; }
     .leader-item { display:flex; align-items:center; margin-bottom:4px; }
     .leader-color { width:10px; height:10px; margin-right:5px; border:1px solid #fff; }
     .leader-tag { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .leader-cells { margin-left:5px; }
-    #menuBtn { position:absolute; top:10px; right:10px; z-index:11; background:rgba(255,255,255,0.9); border:1px solid #ccc; padding:4px 10px; border-radius:4px; cursor:pointer; display:none; }
     #menuPanel { display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:white; border:1px solid #ccc; padding:20px; z-index:20; text-align:center; }
     #selection { display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:white; border:1px solid #ccc; padding:20px; z-index:20; max-height:80vh; overflow-y:auto; }
     #selection button.taken { background:#ffcccc; color:#900; cursor:not-allowed; text-decoration:line-through; }
@@ -33,8 +33,10 @@
     <div id="legendColor"></div>
     <span id="legendHashtag"></span>
   </div>
-  <button id="homeBtn" title="Мои владения">🏠 Мои клетки</button>
-  <button id="menuBtn" title="Меню">⚙️</button>
+  <div id="bottomRightButtons">
+    <button id="homeBtn" title="Мои владения">🏠 Мои клетки</button>
+    <button id="menuBtn" title="Меню">⚙️</button>
+  </div>
   <div id="leaderboard"></div>
   <div id="menuPanel">
     <p>Вы играете за: <strong><span id="menuHashtag"></span></strong></p>
@@ -113,6 +115,7 @@
     const menuHashtag = document.getElementById('menuHashtag');
     const menuCanChange = document.getElementById('menuCanChange');
     const changeHashtagBtn = document.getElementById('changeHashtagBtn');
+    const bottomRightButtons = document.getElementById('bottomRightButtons');
     let selectedTarget = null;
 
     document.addEventListener('gesturestart', e => e.preventDefault());
@@ -120,18 +123,32 @@
     document.addEventListener('gestureend', e => e.preventDefault());
     canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-    // ---------- ФУНКЦИИ КАМЕРЫ (без рывков) ----------
+    // ---------- УМНЫЕ ОГРАНИЧЕНИЯ КАМЕРЫ ----------
     function applyDragConstraints() {
       const worldW = MAP_W * CELL_SIZE;
       const worldH = MAP_H * CELL_SIZE;
       const visibleW = canvas.width / zoom;
       const visibleH = canvas.height / zoom;
-      const padX = visibleW * 0.3;
-      const padY = visibleH * 0.3;
-      if (viewX < -padX) viewX = -padX;
-      if (viewY < -padY) viewY = -padY;
-      if (viewX > worldW - visibleW + padX) viewX = worldW - visibleW + padX;
-      if (viewY > worldH - visibleH + padY) viewY = worldH - visibleH + padY;
+
+      // Если мир помещается в экран — даём небольшой манёвр, но центрируем, не допуская сильных сдвигов
+      if (worldW <= visibleW) {
+        const centerX = (worldW - visibleW) / 2;
+        const maxShiftX = visibleW * 0.2; // можно сместить на 20% экрана
+        viewX = Math.max(centerX - maxShiftX, Math.min(viewX, centerX + maxShiftX));
+      } else {
+        // Мир больше экрана: разрешаем выходить за края на 30% видимой области
+        const padX = visibleW * 0.3;
+        viewX = Math.max(-padX, Math.min(viewX, worldW - visibleW + padX));
+      }
+
+      if (worldH <= visibleH) {
+        const centerY = (worldH - visibleH) / 2;
+        const maxShiftY = visibleH * 0.2;
+        viewY = Math.max(centerY - maxShiftY, Math.min(viewY, centerY + maxShiftY));
+      } else {
+        const padY = visibleH * 0.3;
+        viewY = Math.max(-padY, Math.min(viewY, worldH - visibleH + padY));
+      }
     }
 
     function isValidMap(m) {
@@ -242,12 +259,10 @@
         legend.style.display = 'flex';
         legendColor.style.backgroundColor = currentPlayer.color;
         legendHashtag.textContent = '#' + currentPlayer.hashtag;
-        homeBtn.style.display = 'block';
-        menuBtn.style.display = 'block';
+        bottomRightButtons.style.display = 'flex';
       } else {
         legend.style.display = 'none';
-        homeBtn.style.display = 'none';
-        menuBtn.style.display = 'none';
+        bottomRightButtons.style.display = 'none';
       }
       updateLeaderboard();
     }
@@ -279,7 +294,7 @@
       step();
     }
 
-    // Центрирование на своих клетках (без clamp)
+    // Центрирование на своих клетках (без дёрганий)
     function centerOnMyCells() {
       if (!currentPlayer.hashtag) return;
       const bounds = getTerritoryBounds(currentPlayer.id);
@@ -299,7 +314,6 @@
     // Меню
     menuBtn.addEventListener('click', async () => {
       menuHashtag.textContent = '#' + currentPlayer.hashtag;
-      // Проверим возможность смены
       try {
         const res = await fetch(`${SERVER_URL}/canChange`, {
           method: 'POST',
@@ -326,7 +340,6 @@
 
     changeHashtagBtn.addEventListener('click', () => {
       menuPanel.style.display = 'none';
-      // Показать выбор хештега (с занятыми)
       fetch(`${SERVER_URL}/state`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -349,10 +362,10 @@
       };
     }
 
-    // ---------- DRAG (только левая кнопка) ----------
+    // ---------- DRAG (чувствительность улучшена) ----------
     let isDragging = false, dragStartX, dragStartY, dragStartViewX, dragStartViewY;
     canvas.addEventListener('mousedown', e => {
-      if (e.button !== 0) return; // только левая кнопка
+      if (e.button !== 0) return; // только левая
       isDragging = true;
       dragStartX = e.clientX; dragStartY = e.clientY;
       dragStartViewX = viewX; dragStartViewY = viewY;
@@ -361,8 +374,11 @@
     });
     window.addEventListener('mousemove', e => {
       if (!isDragging) return;
-      viewX = dragStartViewX - (e.clientX - dragStartX)/zoom;
-      viewY = dragStartViewY - (e.clientY - dragStartY)/zoom;
+      // Прямое соответствие без деления на zoom – движение мыши = движение камеры в мировых пикселях
+      const dx = e.clientX - dragStartX;
+      const dy = e.clientY - dragStartY;
+      viewX = dragStartViewX - dx / zoom;
+      viewY = dragStartViewY - dy / zoom;
       applyDragConstraints();
       drawMap();
     });
@@ -371,7 +387,7 @@
       canvas.style.cursor = 'default';
     });
 
-    // Зум (без clamp)
+    // Зум (без рывков)
     canvas.addEventListener('wheel', e => {
       e.preventDefault();
       const rect = canvas.getBoundingClientRect();
@@ -397,8 +413,10 @@
     canvas.addEventListener('touchmove', e => {
       e.preventDefault(); const t = e.touches;
       if (t.length===1 && isDragging) {
-        viewX = dragStartViewX - (t[0].clientX - dragStartX)/zoom;
-        viewY = dragStartViewY - (t[0].clientY - dragStartY)/zoom;
+        const dx = t[0].clientX - dragStartX;
+        const dy = t[0].clientY - dragStartY;
+        viewX = dragStartViewX - dx/zoom;
+        viewY = dragStartViewY - dy/zoom;
         applyDragConstraints();
         drawMap();
       } else if (t.length===2 && lastTouches) {
