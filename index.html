@@ -26,7 +26,7 @@
     const CELL_SIZE = 20;
     const MAP_W = 40;
     const MAP_H = 30;
-    const SERVER_URL = 'https://here-vacation-mistress-region.trycloudflare.com'; // ваш адрес
+    const SERVER_URL = 'https://here-vacation-mistress-region.trycloudflare.com'; // замените на свой
 
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
@@ -40,15 +40,34 @@
       color: '#cccccc',
       hashtag: null
     };
-    let map = Array(MAP_H).fill(null).map(() => Array(MAP_W).fill().map(() => ({ ownerId: null, hashtag: '' })));
+
+    // Начальная пустая карта (на случай, если сервер не ответит)
+    let map = Array(MAP_H).fill(null).map(() =>
+      Array(MAP_W).fill().map(() => ({ ownerId: null, hashtag: '' }))
+    );
+
+    // ---------- ПРОВЕРКА КАРТЫ ----------
+    function isValidMap(m) {
+      return Array.isArray(m) && m.length === MAP_H &&
+             m[0] && m[0].length === MAP_W;
+    }
 
     // ---------- ОТРИСОВКА ----------
     function drawMap() {
+      if (!isValidMap(map)) {
+        console.error('Карта повреждена:', map);
+        updateInfo('Ошибка карты, перезагрузите');
+        return;
+      }
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       for (let y = 0; y < MAP_H; y++) {
         for (let x = 0; x < MAP_W; x++) {
           const cell = map[y][x];
+          if (!cell || typeof cell.ownerId === 'undefined') {
+            console.warn(`Нет клетки в [${y}][${x}]`, cell);
+            continue;
+          }
           const px = x * CELL_SIZE;
           const py = y * CELL_SIZE;
           if (cell.ownerId) {
@@ -103,7 +122,8 @@
         if (res.success) {
           currentPlayer.hashtag = res.player.hashtag;
           currentPlayer.likes = res.player.likes;
-          map = res.map;
+          if (isValidMap(res.map)) map = res.map;
+          else console.error('Сервер вернул битую карту:', res.map);
           hideHashtagSelection();
           drawMap();
           updateInfo(`Хештег #${hashtag} выбран. Лайков: ${currentPlayer.likes}`);
@@ -122,13 +142,15 @@
       .then(r => r.json())
       .then(res => {
         if (res.success) {
-          map = res.map;
+          if (isValidMap(res.map)) map = res.map;
+          else console.error('Сервер вернул битую карту:', res.map);
           currentPlayer.likes = res.player.likes;
           drawMap();
           updateInfo(`Лайков: ${currentPlayer.likes}`);
         } else {
           updateInfo(`Ошибка: ${res.error}`);
-          if (res.map) map = res.map;
+          // Обновляем карту и лайки, даже если атака не удалась
+          if (isValidMap(res.map)) map = res.map;
           if (res.player) currentPlayer.likes = res.player.likes;
           drawMap();
         }
@@ -148,7 +170,7 @@
           currentPlayer.likes = data.player.likes;
           if (currentPlayer.hashtag === null) currentPlayer.hashtag = data.player.hashtag;
         }
-        if (data.map) map = data.map;
+        if (isValidMap(data.map)) map = data.map;
         drawMap();
         updateInfo(`Лайков: ${currentPlayer.likes}`);
       });
@@ -171,11 +193,10 @@
         currentPlayer.likes = state.player.likes;
         currentPlayer.color = state.player.color;
         currentPlayer.hashtag = state.player.hashtag;
-        map = state.map;
+        if (isValidMap(state.map)) map = state.map;
         drawMap();
 
         if (!currentPlayer.hashtag && state.availableHashtags) {
-          // Игрок ещё не выбрал хештег — показываем окно выбора
           showHashtagSelection(state.availableHashtags);
         } else {
           updateInfo(`Лайков: ${currentPlayer.likes}`);
@@ -188,7 +209,7 @@
 
     // ---------- ОБРАБОТКА КЛИКОВ ----------
     canvas.addEventListener('click', (e) => {
-      if (!currentPlayer.hashtag) return; // не атакуем, пока нет хештега
+      if (!currentPlayer.hashtag) return;
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / rect.width;
       const scaleY = canvas.height / rect.height;
