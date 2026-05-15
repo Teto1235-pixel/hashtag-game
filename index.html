@@ -45,7 +45,7 @@
     const CELL_SIZE = 6;
     const MAP_W = 100;
     const MAP_H = 100;
-    const SERVER_URL = 'https://here-vacation-mistress-region.trycloudflare.com'; // замените
+    const SERVER_URL = 'https://here-vacation-mistress-region.trycloudflare.com'; // ваш адрес
 
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
@@ -64,8 +64,8 @@
     let adjacentSet = new Set();
 
     // Анимация
-    let animating = false;           // блокируем действия во время анимации
-    let animationQueue = [];        // клетки для анимации
+    let animating = false;
+    let animationQueue = [];
     let animationTimer = null;
 
     // Камера
@@ -83,16 +83,29 @@
     let selectedTarget = null;
 
     // ---------- БЛОКИРОВКА СИСТЕМНОГО ЗУМА ----------
-    // Для iOS запрещаем gesturestart (pinch)
     document.addEventListener('gesturestart', (e) => e.preventDefault());
     document.addEventListener('gesturechange', (e) => e.preventDefault());
     document.addEventListener('gestureend', (e) => e.preventDefault());
 
-    // VK Bridge: отключаем масштабирование внутри Mini App
-    if (window.vkBridge) {
-      vkBridge.send('VKWebAppInit').then(() => {
-        // Нет прямого метода, но можно попробовать установить настройки
-      });
+    // ---------- ОГРАНИЧЕНИЯ КАМЕРЫ ----------
+    function clampCamera() {
+      const canvasDisplayWidth = canvas.clientWidth;   // текущий размер на экране
+      const canvasDisplayHeight = canvas.clientHeight;
+
+      // Мировые размеры карты в пикселях
+      const worldW = MAP_W * CELL_SIZE;
+      const worldH = MAP_H * CELL_SIZE;
+
+      // Видимая область в мировых координатах
+      const visibleW = canvasDisplayWidth / zoom;
+      const visibleH = canvasDisplayHeight / zoom;
+
+      // Не даём камере уйти левее 0 или правее worldW - visibleW
+      const maxViewX = Math.max(0, worldW - visibleW);
+      const maxViewY = Math.max(0, worldH - visibleH);
+
+      viewX = Math.max(0, Math.min(viewX, maxViewX));
+      viewY = Math.max(0, Math.min(viewY, maxViewY));
     }
 
     // ---------- ПРОВЕРКА КАРТЫ ----------
@@ -163,7 +176,7 @@
         ctx.stroke();
       }
 
-      // Подсветка соседних клеток (если не идёт анимация)
+      // Подсветка соседних клеток
       if (!animating && currentPlayer.id && adjacentSet.size > 0) {
         ctx.strokeStyle = '#FFD700';
         ctx.lineWidth = 1.5 / zoom;
@@ -189,10 +202,9 @@
       document.getElementById('info').textContent = text;
     }
 
-    // ---------- АНИМАЦИЯ ЗАХВАТА ----------
+    // ---------- АНИМАЦИЯ ЗАХВАТА (замедленная) ----------
     function animateCapture(capturedCells, serverMap) {
       if (capturedCells.length === 0) {
-        // Применяем карту сразу
         map = serverMap;
         updateAdjacentSet();
         drawMap();
@@ -203,7 +215,6 @@
 
       animating = true;
       animationQueue = [...capturedCells];
-      // Обновляем карту на серверную (уже содержит все захваченные клетки)
       map = serverMap;
 
       function step() {
@@ -214,10 +225,9 @@
           updateInfo(`Лайков: ${currentPlayer.likes}`);
           return;
         }
-        // Можно визуально подсветить захваченные клетки, но они уже в map
-        drawMap(); // перерисовываем, клетки уже видны
+        drawMap();
         animationQueue.shift();
-        animationTimer = setTimeout(step, 60); // 60 мс между клетками
+        animationTimer = setTimeout(step, 120); // было 60, теперь 120 мс
       }
 
       step();
@@ -243,7 +253,7 @@
       return { x: Math.floor(worldX / CELL_SIZE), y: Math.floor(worldY / CELL_SIZE) };
     }
 
-    // ---------- УПРАВЛЕНИЕ КАМЕРОЙ ----------
+    // ---------- УПРАВЛЕНИЕ КАМЕРОЙ (с ограничениями) ----------
     let isDragging = false, dragStartX, dragStartY, dragStartViewX, dragStartViewY;
 
     canvas.addEventListener('mousedown', (e) => {
@@ -264,6 +274,7 @@
       const dy = e.clientY - dragStartY;
       viewX = dragStartViewX - dx / zoom;
       viewY = dragStartViewY - dy / zoom;
+      clampCamera();
       drawMap();
     });
 
@@ -289,6 +300,7 @@
         viewX = worldX * newZoom - mouseCanvasX;
         viewY = worldY * newZoom - mouseCanvasY;
         zoom = newZoom;
+        clampCamera();
         drawMap();
       }
     });
@@ -323,6 +335,7 @@
         const dy = touches[0].clientY - dragStartY;
         viewX = dragStartViewX - dx / zoom;
         viewY = dragStartViewY - dy / zoom;
+        clampCamera();
         drawMap();
       } else if (touches.length === 2 && lastTouches) {
         const newDist = Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
@@ -343,6 +356,7 @@
         lastTouches.viewX = viewX;
         lastTouches.viewY = viewY;
         lastTouches.zoom = zoom;
+        clampCamera();
         drawMap();
       }
     });
@@ -407,10 +421,8 @@
       if (data.playersInfo) playersInfo = data.playersInfo;
 
       if (capturedCells && capturedCells.length > 0) {
-        // Запускаем анимацию захвата
         animateCapture(capturedCells, data.map);
       } else {
-        // Обычное обновление (например, после /state)
         if (isValidMap(data.map)) map = data.map;
         updateAdjacentSet();
         drawMap();
@@ -481,6 +493,17 @@
     }
 
     // ---------- ИНИЦИАЛИЗАЦИЯ ----------
+    // Начальное центрирование карты (весь мир посередине экрана)
+    function centerCamera() {
+      const canvasW = canvas.clientWidth;
+      const canvasH = canvas.clientHeight;
+      const worldW = MAP_W * CELL_SIZE;
+      const worldH = MAP_H * CELL_SIZE;
+      viewX = (worldW - canvasW / zoom) / 2;
+      viewY = (worldH - canvasH / zoom) / 2;
+      clampCamera();
+    }
+
     vkBridge.send('VKWebAppInit')
       .then(() => vkBridge.send('VKWebAppGetUserInfo'))
       .then(data => {
@@ -495,6 +518,7 @@
       .then(r => r.json())
       .then(state => {
         currentPlayer.color = state.player.color;
+        centerCamera();        // отцентрировали камеру
         applyServerResponse(state, null);
         if (!currentPlayer.hashtag && state.availableHashtags) {
           showHashtagSelection(state.availableHashtags);
