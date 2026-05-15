@@ -240,22 +240,27 @@
       };
     }
 
-      // ---------- ОБНОВЛЕНИЕ ПОЛЗУНКОВ ----------
+          // ---------- ОБНОВЛЕНИЕ ПОЛЗУНКОВ ----------
     function updateSlidersRange() {
       const worldW = MAP_W * CELL_SIZE;
       const worldH = MAP_H * CELL_SIZE;
       const visibleW = canvas.width / zoom;
       const visibleH = canvas.height / zoom;
 
+      // Ползунки всегда 0..размер мира
       hSlider.min = 0;
-      hSlider.max = Math.max(0, worldW - visibleW);
+      hSlider.max = Math.max(0, worldW);
       vSlider.min = 0;
-      vSlider.max = Math.max(0, worldH - visibleH);
+      vSlider.max = Math.max(0, worldH);
 
-      // Значения соответствуют viewX / viewY
-      hSlider.value = viewX;
-      vSlider.value = viewY;
+      // Значение = центр видимой области в мировых координатах
+      const centerX = viewX + visibleW / 2;
+      const centerY = viewY + visibleH / 2;
 
+      hSlider.value = Math.min(worldW, Math.max(0, centerX));
+      vSlider.value = Math.min(worldH, Math.max(0, centerY));
+
+      // Показываем ползунки, только если игрок активен
       if (currentPlayer.id && currentPlayer.hashtag) {
         hSliderContainer.style.display = 'block';
         vSliderContainer.style.display = 'block';
@@ -266,12 +271,20 @@
     }
 
     hSlider.addEventListener('input', () => {
-      viewX = Number(hSlider.value);
+      const worldW = MAP_W * CELL_SIZE;
+      const visibleW = canvas.width / zoom;
+      const targetCenterX = Number(hSlider.value);
+      viewX = targetCenterX - visibleW / 2;
+      viewX = Math.min(worldW - visibleW, Math.max(0, viewX)); // мягкие границы, чтобы не улететь далеко
       drawMap();
     });
 
     vSlider.addEventListener('input', () => {
-      viewY = Number(vSlider.value);
+      const worldH = MAP_H * CELL_SIZE;
+      const visibleH = canvas.height / zoom;
+      const targetCenterY = Number(vSlider.value);
+      viewY = targetCenterY - visibleH / 2;
+      viewY = Math.min(worldH - visibleH, Math.max(0, viewY));
       drawMap();
     });
 
