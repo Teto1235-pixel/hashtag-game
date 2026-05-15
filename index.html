@@ -2,10 +2,10 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>Hashtag Territory</title>
   <style>
-    body { margin: 0; padding: 0; background: #222; font-family: monospace; overflow: hidden; touch-action: none; }
+    body { margin: 0; padding: 0; background: #222; font-family: monospace; overflow: hidden; touch-action: manipulation; }
     #canvasContainer { width: 100%; height: 100vh; display: flex; justify-content: center; align-items: center; }
     canvas { display: block; max-width: 100%; max-height: 100%; touch-action: none; }
     #info { position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(255,255,255,0.9); padding: 4px 8px; border-radius: 4px; }
@@ -29,7 +29,7 @@
   </div>
   <div id="attackPanel">
     <div>Цель: <span id="targetCoords"></span></div>
-    <div>Сила атаки: <span id="powerValue">1</span></div>
+    <div>Захватить клеток: <span id="powerValue">1</span></div>
     <input type="range" id="powerSlider" min="1" max="1" value="1">
     <br>
     <button id="attackBtn">Атаковать</button>
@@ -59,20 +59,20 @@
       color: '#cccccc',
       hashtag: null
     };
-
-    let map = Array(MAP_H).fill(null).map(() =>
-      Array(MAP_W).fill().map(() => ({ ownerId: null, hashtag: '' }))
-    );
+    let map = Array(MAP_H).fill(null).map(() => Array(MAP_W).fill().map(() => ({ ownerId: null, hashtag: '' })));
     let playersInfo = {};
     let adjacentSet = new Set();
 
-    // ---------- КАМЕРА (pan & zoom) ----------
-    let viewX = 0, viewY = 0;
-    let zoom = 1;
-    const MIN_ZOOM = 0.5;
-    const MAX_ZOOM = 5;
+    // Анимация
+    let animating = false;           // блокируем действия во время анимации
+    let animationQueue = [];        // клетки для анимации
+    let animationTimer = null;
 
-    // UI элементы
+    // Камера
+    let viewX = 0, viewY = 0, zoom = 1;
+    const MIN_ZOOM = 0.5, MAX_ZOOM = 5;
+
+    // UI
     const attackPanel = document.getElementById('attackPanel');
     const powerSlider = document.getElementById('powerSlider');
     const powerValue = document.getElementById('powerValue');
@@ -82,10 +82,22 @@
     const legendHashtag = document.getElementById('legendHashtag');
     let selectedTarget = null;
 
+    // ---------- БЛОКИРОВКА СИСТЕМНОГО ЗУМА ----------
+    // Для iOS запрещаем gesturestart (pinch)
+    document.addEventListener('gesturestart', (e) => e.preventDefault());
+    document.addEventListener('gesturechange', (e) => e.preventDefault());
+    document.addEventListener('gestureend', (e) => e.preventDefault());
+
+    // VK Bridge: отключаем масштабирование внутри Mini App
+    if (window.vkBridge) {
+      vkBridge.send('VKWebAppInit').then(() => {
+        // Нет прямого метода, но можно попробовать установить настройки
+      });
+    }
+
     // ---------- ПРОВЕРКА КАРТЫ ----------
     function isValidMap(m) {
-      return Array.isArray(m) && m.length === MAP_H &&
-             m[0] && m[0].length === MAP_W;
+      return Array.isArray(m) && m.length === MAP_H && m[0] && m[0].length === MAP_W;
     }
 
     function updateAdjacentSet() {
@@ -98,11 +110,9 @@
             const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
             for (const [dx,dy] of dirs) {
               const nx = x + dx, ny = y + dy;
-              if (nx >=0 && nx < MAP_W && ny >=0 && ny < MAP_H) {
-                if (map[ny][nx].ownerId === currentPlayer.id) {
-                  adjacentSet.add(`${x},${y}`);
-                  break;
-                }
+              if (nx >=0 && nx < MAP_W && ny >=0 && ny < MAP_H && map[ny][nx].ownerId === currentPlayer.id) {
+                adjacentSet.add(`${x},${y}`);
+                break;
               }
             }
           }
@@ -110,14 +120,12 @@
       }
     }
 
-    // ---------- ОТРИСОВКА (с учётом камеры) ----------
+    // ---------- ОТРИСОВКА ----------
     function drawMap() {
       if (!isValidMap(map)) return;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.save();
-
-      // Применяем трансформацию камеры
       ctx.translate(-viewX, -viewY);
       ctx.scale(zoom, zoom);
 
@@ -131,7 +139,6 @@
           const cell = map[y][x];
           const px = x * CELL_SIZE;
           const py = y * CELL_SIZE;
-
           if (cell.ownerId) {
             const ownerInfo = playersInfo[cell.ownerId];
             ctx.fillStyle = ownerInfo ? ownerInfo.color : '#cccccc';
@@ -140,7 +147,7 @@
         }
       }
 
-      // Сетка (очень тонкая)
+      // Сетка
       ctx.strokeStyle = '#e0e0e0';
       ctx.lineWidth = 0.3 / zoom;
       for (let y = 0; y <= MAP_H; y++) {
@@ -156,8 +163,8 @@
         ctx.stroke();
       }
 
-      // Подсветка соседних клеток
-      if (currentPlayer.id && adjacentSet.size > 0) {
+      // Подсветка соседних клеток (если не идёт анимация)
+      if (!animating && currentPlayer.id && adjacentSet.size > 0) {
         ctx.strokeStyle = '#FFD700';
         ctx.lineWidth = 1.5 / zoom;
         adjacentSet.forEach(coord => {
@@ -182,8 +189,49 @@
       document.getElementById('info').textContent = text;
     }
 
+    // ---------- АНИМАЦИЯ ЗАХВАТА ----------
+    function animateCapture(capturedCells, serverMap) {
+      if (capturedCells.length === 0) {
+        // Применяем карту сразу
+        map = serverMap;
+        updateAdjacentSet();
+        drawMap();
+        updateInfo(`Лайков: ${currentPlayer.likes}`);
+        animating = false;
+        return;
+      }
+
+      animating = true;
+      animationQueue = [...capturedCells];
+      // Обновляем карту на серверную (уже содержит все захваченные клетки)
+      map = serverMap;
+
+      function step() {
+        if (animationQueue.length === 0) {
+          animating = false;
+          updateAdjacentSet();
+          drawMap();
+          updateInfo(`Лайков: ${currentPlayer.likes}`);
+          return;
+        }
+        // Можно визуально подсветить захваченные клетки, но они уже в map
+        drawMap(); // перерисовываем, клетки уже видны
+        animationQueue.shift();
+        animationTimer = setTimeout(step, 60); // 60 мс между клетками
+      }
+
+      step();
+    }
+
+    function cancelAnimation() {
+      if (animationTimer) clearTimeout(animationTimer);
+      animating = false;
+      animationQueue = [];
+      updateAdjacentSet();
+      drawMap();
+    }
+
     // ---------- КОНВЕРТАЦИЯ КООРДИНАТ ----------
-    // Из экранных в мировые
     function screenToWorld(screenX, screenY) {
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / rect.width;
@@ -196,12 +244,9 @@
     }
 
     // ---------- УПРАВЛЕНИЕ КАМЕРОЙ ----------
-    let isDragging = false;
-    let dragStartX, dragStartY;
-    let dragStartViewX, dragStartViewY;
+    let isDragging = false, dragStartX, dragStartY, dragStartViewX, dragStartViewY;
 
     canvas.addEventListener('mousedown', (e) => {
-      // ПКМ или Ctrl+ЛКМ не панаем (оставим под возможные действия)
       if (e.button === 0 && !e.ctrlKey) {
         isDragging = true;
         dragStartX = e.clientX;
@@ -209,6 +254,7 @@
         dragStartViewX = viewX;
         dragStartViewY = viewY;
         canvas.style.cursor = 'grabbing';
+        e.preventDefault();
       }
     });
 
@@ -235,10 +281,8 @@
       const scaleY = canvas.height / rect.height;
       const mouseCanvasX = (e.clientX - rect.left) * scaleX;
       const mouseCanvasY = (e.clientY - rect.top) * scaleY;
-
       const worldX = (mouseCanvasX + viewX) / zoom;
       const worldY = (mouseCanvasY + viewY) / zoom;
-
       const delta = e.deltaY > 0 ? 0.9 : 1.1;
       const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * delta));
       if (newZoom !== zoom) {
@@ -249,7 +293,7 @@
       }
     });
 
-    // Тач-события (панорамирование одним пальцем, масштаб двумя)
+    // Тач-события
     let lastTouches = null;
     canvas.addEventListener('touchstart', (e) => {
       e.preventDefault();
@@ -263,8 +307,7 @@
       } else if (touches.length === 2) {
         isDragging = false;
         lastTouches = {
-          dist: Math.hypot(touches[0].clientX - touches[1].clientX,
-                           touches[0].clientY - touches[1].clientY),
+          dist: Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY),
           centerX: (touches[0].clientX + touches[1].clientX) / 2,
           centerY: (touches[0].clientY + touches[1].clientY) / 2,
           viewX, viewY, zoom
@@ -282,28 +325,20 @@
         viewY = dragStartViewY - dy / zoom;
         drawMap();
       } else if (touches.length === 2 && lastTouches) {
-        const newDist = Math.hypot(touches[0].clientX - touches[1].clientX,
-                                   touches[0].clientY - touches[1].clientY);
+        const newDist = Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
         const scale = newDist / lastTouches.dist;
         const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, lastTouches.zoom * scale));
-
         const centerX = (touches[0].clientX + touches[1].clientX) / 2;
         const centerY = (touches[0].clientY + touches[1].clientY) / 2;
-
-        // Вычисляем мировую точку под центром пальцев до и после масштаба
         const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
+        const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
         const canvasCX = (centerX - rect.left) * scaleX;
         const canvasCY = (centerY - rect.top) * scaleY;
-
         const worldX = (canvasCX + lastTouches.viewX) / lastTouches.zoom;
         const worldY = (canvasCY + lastTouches.viewY) / lastTouches.zoom;
-
         zoom = newZoom;
         viewX = worldX * zoom - canvasCX;
         viewY = worldY * zoom - canvasCY;
-
         lastTouches.dist = newDist;
         lastTouches.viewX = viewX;
         lastTouches.viewY = viewY;
@@ -319,12 +354,9 @@
       }
     });
 
-    // ---------- АТАКА (клик) ----------
+    // ---------- КЛИК (АТАКА) ----------
     canvas.addEventListener('click', (e) => {
-      // Если был драг, не считаем кликом (проверяем по перемещению)
-      // Для упрощения обработаем только если не было значительного сдвига
-      if (isDragging) return;
-
+      if (isDragging || animating) return;
       if (!currentPlayer.hashtag) return;
 
       const world = screenToWorld(e.clientX, e.clientY);
@@ -358,24 +390,32 @@
     });
 
     document.getElementById('attackBtn').addEventListener('click', () => {
-      if (!selectedTarget) return;
-      attackCell(selectedTarget.x, selectedTarget.y, Number(powerSlider.value));
+      if (!selectedTarget || animating) return;
+      const amount = Number(powerSlider.value);
+      attackCell(selectedTarget.x, selectedTarget.y, amount);
       hideAttackPanel();
     });
 
     document.getElementById('cancelAttackBtn').addEventListener('click', hideAttackPanel);
 
     // ---------- ЗАПРОСЫ К СЕРВЕРУ ----------
-    function applyServerResponse(data) {
+    function applyServerResponse(data, capturedCells) {
       if (data.player) {
         currentPlayer.likes = data.player.likes;
         if (currentPlayer.hashtag === null) currentPlayer.hashtag = data.player.hashtag;
       }
-      if (isValidMap(data.map)) map = data.map;
       if (data.playersInfo) playersInfo = data.playersInfo;
-      updateAdjacentSet();
-      drawMap();
-      updateInfo(`Лайков: ${currentPlayer.likes}`);
+
+      if (capturedCells && capturedCells.length > 0) {
+        // Запускаем анимацию захвата
+        animateCapture(capturedCells, data.map);
+      } else {
+        // Обычное обновление (например, после /state)
+        if (isValidMap(data.map)) map = data.map;
+        updateAdjacentSet();
+        drawMap();
+        updateInfo(`Лайков: ${currentPlayer.likes}`);
+      }
     }
 
     function claimHashtag(hashtag) {
@@ -388,7 +428,7 @@
       .then(res => {
         if (res.success) {
           currentPlayer.color = res.player.color;
-          applyServerResponse(res);
+          applyServerResponse(res, null);
           hideHashtagSelection();
         } else {
           alert(res.error);
@@ -405,23 +445,23 @@
       .then(r => r.json())
       .then(res => {
         if (res.success) {
-          applyServerResponse(res);
+          applyServerResponse(res, res.capturedCells);
         } else {
           updateInfo(`Ошибка: ${res.error}`);
-          applyServerResponse(res);
+          applyServerResponse(res, null);
         }
       });
     }
 
     function fetchState() {
-      if (!currentPlayer.id) return;
+      if (!currentPlayer.id || animating) return;
       fetch(`${SERVER_URL}/state`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentPlayer.id })
       })
       .then(r => r.json())
-      .then(data => applyServerResponse(data));
+      .then(data => applyServerResponse(data, null));
     }
 
     function showHashtagSelection(hashtags) {
@@ -455,7 +495,7 @@
       .then(r => r.json())
       .then(state => {
         currentPlayer.color = state.player.color;
-        applyServerResponse(state);
+        applyServerResponse(state, null);
         if (!currentPlayer.hashtag && state.availableHashtags) {
           showHashtagSelection(state.availableHashtags);
         }
