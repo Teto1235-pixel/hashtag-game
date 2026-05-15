@@ -66,7 +66,7 @@
   <script>
     // ---------- НАСТРОЙКИ ----------
     const CELL_SIZE = 8;
-    let MAP_W = 320;
+    let MAP_W = 320;   // 16:9
     let MAP_H = 180;
     const SERVER_URL = 'https://here-vacation-mistress-region.trycloudflare.com'; // замените
 
@@ -117,15 +117,8 @@
     document.addEventListener('gestureend', e => e.preventDefault());
     canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-    // ---------- ГРАНИЦЫ КАМЕРЫ (можно подвести край к центру) ----------
-    function clampCamera() {
-      const worldW = MAP_W * CELL_SIZE;
-      const worldH = MAP_H * CELL_SIZE;
-      const visibleW = canvas.width / zoom;
-      const visibleH = canvas.height / zoom;
-      viewX = Math.max(-visibleW / 2, Math.min(viewX, worldW - visibleW / 2));
-      viewY = Math.max(-visibleH / 2, Math.min(viewY, worldH - visibleH / 2));
-    }
+    // ---------- КАМЕРА (полностью свободная) ----------
+    // Никаких ограничений больше нет
 
     function isValidMap(m) {
       return Array.isArray(m) && m.length === MAP_H && m[0]?.length === MAP_W;
@@ -163,7 +156,7 @@
       return { minX, minY, maxX, maxY, count, width: maxX-minX+1, height: maxY-minY+1 };
     }
 
-    // Поиск ближайшей к заданной мировой точке клетки игрока
+    // Поиск ближайшей к мировой точке клетки игрока
     function findClosestOwnCell(worldX, worldY) {
       if (!currentPlayer.id || !currentPlayer.hashtag) return null;
       let bestCell = null;
@@ -186,70 +179,38 @@
       return bestCell;
     }
 
-    // Рисуем стрелку-указатель к ближайшей своей клетке, если центр экрана вне территории
+    // Рисует стрелку внизу по центру экрана
     function drawDirectionIndicator() {
       if (!currentPlayer.hashtag || !currentPlayer.id) return;
-      // Центр экрана в мировых координатах
-      const screenCenterX = canvas.width / 2;
-      const screenCenterY = canvas.height / 2;
-      const centerWorldX = (screenCenterX + viewX) / zoom;
-      const centerWorldY = (screenCenterY + viewY) / zoom;
+      // Берём точку в центре нижней части экрана (над кнопками)
+      const arrowX = canvas.width / 2;
+      const arrowY = canvas.height - 60; // чуть выше кнопок и панелей
 
-      const closest = findClosestOwnCell(centerWorldX, centerWorldY);
+      // Мировая координата под этой точкой
+      const worldX = (arrowX + viewX) / zoom;
+      const worldY = (arrowY + viewY) / zoom;
+
+      const closest = findClosestOwnCell(worldX, worldY);
       if (!closest) return;
 
-      // Проверяем, находится ли центр экрана внутри своей территории (очень близко к своей клетке)
-      const cellSize = CELL_SIZE;
-      const cellCenterX = closest.worldX;
-      const cellCenterY = closest.worldY;
-      const distToCenter = Math.hypot(cellCenterX - centerWorldX, cellCenterY - centerWorldY);
-      // Если центр экрана в пределах своей клетки или рядом — не показываем стрелку
-      if (distToCenter < cellSize * 1.5) return;
-
-      // Вектор от центра экрана к клетке
-      const dx = cellCenterX - centerWorldX;
-      const dy = cellCenterY - centerWorldY;
+      // Вектор направления
+      const dx = closest.worldX - worldX;
+      const dy = closest.worldY - worldY;
       const len = Math.sqrt(dx*dx + dy*dy);
-      if (len === 0) return;
-      const ndx = dx / len;
-      const ndy = dy / len;
-
-      // Находим точку на границе видимой области (canvas)
-      const w = canvas.width;
-      const h = canvas.height;
-      let edgeX = screenCenterX + ndx * Math.min(w, h) * 0.4; // отступ от края
-      let edgeY = screenCenterY + ndy * Math.min(w, h) * 0.4;
-
-      // Убедимся, что точка на границе экрана
-      const margin = 30;
-      // Проецируем на границы
-      const tLeft = (margin - screenCenterX) / ndx;
-      const tRight = (w - margin - screenCenterX) / ndx;
-      const tTop = (margin - screenCenterY) / ndy;
-      const tBottom = (h - margin - screenCenterY) / ndy;
-
-      let t = Infinity;
-      if (tLeft > 0 && tLeft < t) t = tLeft;
-      if (tRight > 0 && tRight < t) t = tRight;
-      if (tTop > 0 && tTop < t) t = tTop;
-      if (tBottom > 0 && tBottom < t) t = tBottom;
-
-      if (t === Infinity) return;
-      const ix = screenCenterX + ndx * t;
-      const iy = screenCenterY + ndy * t;
+      if (len < 1) return; // уже на месте
+      const angle = Math.atan2(dy, dx);
 
       // Рисуем треугольник
       ctx.save();
-      ctx.translate(ix, iy);
-      const angle = Math.atan2(ndy, ndx);
+      ctx.translate(arrowX, arrowY);
       ctx.rotate(angle);
       ctx.fillStyle = '#FFD700';
       ctx.shadowColor = '#000';
       ctx.shadowBlur = 6;
       ctx.beginPath();
-      ctx.moveTo(10, 0);
-      ctx.lineTo(-8, -6);
-      ctx.lineTo(-8, 6);
+      ctx.moveTo(12, 0);
+      ctx.lineTo(-8, -8);
+      ctx.lineTo(-8, 8);
       ctx.closePath();
       ctx.fill();
       ctx.restore();
@@ -322,7 +283,7 @@
       ctx.textAlign = 'start';
       ctx.restore();
 
-      // Стрелка-указатель (рисуется в экранных координатах)
+      // Стрелка-указатель по центру внизу
       drawDirectionIndicator();
 
       // UI
@@ -416,7 +377,7 @@
       };
     }
 
-    // ---------- DRAG ----------
+    // ---------- DRAG (без ограничений) ----------
     let isDragging = false, dragStartX, dragStartY, dragStartViewX, dragStartViewY;
     canvas.addEventListener('mousedown', e => {
       if (e.button !== 0) return;
@@ -432,7 +393,6 @@
       const dy = e.clientY - dragStartY;
       viewX = dragStartViewX - dx / zoom;
       viewY = dragStartViewY - dy / zoom;
-      clampCamera();
       drawMap();
     });
     window.addEventListener('mouseup', () => {
@@ -440,7 +400,7 @@
       canvas.style.cursor = 'default';
     });
 
-    // Зум
+    // Зум (без ограничений)
     canvas.addEventListener('wheel', e => {
       e.preventDefault();
       const rect = canvas.getBoundingClientRect();
@@ -470,7 +430,6 @@
         const dy = t[0].clientY - dragStartY;
         viewX = dragStartViewX - dx/zoom;
         viewY = dragStartViewY - dy/zoom;
-        clampCamera();
         drawMap();
       } else if (t.length===2 && lastTouches) {
         const newDist = Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
@@ -487,7 +446,7 @@
     });
     canvas.addEventListener('touchend', e => { if (e.touches.length===0) { isDragging=false; lastTouches=null; } });
 
-    // Атака
+    // Атака (только внутри поля)
     canvas.addEventListener('click', e => {
       if (isDragging || animating || spectating) return;
       if (!currentPlayer.hashtag) return;
