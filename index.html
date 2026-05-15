@@ -17,6 +17,8 @@
     .leader-color { width:10px; height:10px; margin-right:5px; border:1px solid #fff; }
     .leader-tag { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .leader-cells { margin-left:5px; }
+    #menuBtn { position:absolute; top:10px; right:10px; z-index:11; background:rgba(255,255,255,0.9); border:1px solid #ccc; padding:4px 10px; border-radius:4px; cursor:pointer; display:none; }
+    #menuPanel { display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:white; border:1px solid #ccc; padding:20px; z-index:20; text-align:center; }
     #selection { display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:white; border:1px solid #ccc; padding:20px; z-index:20; max-height:80vh; overflow-y:auto; }
     #selection button.taken { background:#ffcccc; color:#900; cursor:not-allowed; text-decoration:line-through; }
     #attackPanel { display:none; position:absolute; bottom:20px; left:50%; transform:translateX(-50%); background:white; border:1px solid #ccc; padding:15px; z-index:20; text-align:center; }
@@ -32,7 +34,14 @@
     <span id="legendHashtag"></span>
   </div>
   <button id="homeBtn" title="Мои владения">🏠 Мои клетки</button>
+  <button id="menuBtn" title="Меню">⚙️</button>
   <div id="leaderboard"></div>
+  <div id="menuPanel">
+    <p>Вы играете за: <strong><span id="menuHashtag"></span></strong></p>
+    <p id="menuCanChange"></p>
+    <button id="changeHashtagBtn">Сменить хештег</button>
+    <button id="closeMenuBtn">Закрыть</button>
+  </div>
   <div id="selection">
     <h3>Выберите хештег</h3>
     <div id="hashtagList"></div>
@@ -70,7 +79,6 @@
       const container = document.getElementById('canvasContainer');
       canvas.width = container.clientWidth;
       canvas.height = container.clientHeight;
-      clampView();
       drawMap();
     }
     window.addEventListener('resize', resizeCanvas);
@@ -100,35 +108,30 @@
     const leaderboardDiv = document.getElementById('leaderboard');
     const selectionDiv = document.getElementById('selection');
     const gameoverDiv = document.getElementById('gameover');
+    const menuBtn = document.getElementById('menuBtn');
+    const menuPanel = document.getElementById('menuPanel');
+    const menuHashtag = document.getElementById('menuHashtag');
+    const menuCanChange = document.getElementById('menuCanChange');
+    const changeHashtagBtn = document.getElementById('changeHashtagBtn');
     let selectedTarget = null;
 
     document.addEventListener('gesturestart', e => e.preventDefault());
     document.addEventListener('gesturechange', e => e.preventDefault());
     document.addEventListener('gestureend', e => e.preventDefault());
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-    // ---------- КАМЕРА (границы без дёрганья) ----------
-    function clampView() {
-      const worldW = MAP_W * CELL_SIZE;
-      const worldH = MAP_H * CELL_SIZE;
-      const visibleW = canvas.width / zoom;
-      const visibleH = canvas.height / zoom;
-      // Разрешаем небольшой выход за края, чтобы можно было подвести край к центру
-      const padX = visibleW * 0.3;
-      const padY = visibleH * 0.3;
-      viewX = Math.max(-padX, Math.min(viewX, worldW - visibleW + padX));
-      viewY = Math.max(-padY, Math.min(viewY, worldH - visibleH + padY));
-    }
-
-    // Применяется только после перетаскивания, но не при зуме
+    // ---------- ФУНКЦИИ КАМЕРЫ (без рывков) ----------
     function applyDragConstraints() {
       const worldW = MAP_W * CELL_SIZE;
       const worldH = MAP_H * CELL_SIZE;
       const visibleW = canvas.width / zoom;
       const visibleH = canvas.height / zoom;
-      if (viewX < -visibleW * 0.3) viewX = -visibleW * 0.3;
-      if (viewY < -visibleH * 0.3) viewY = -visibleH * 0.3;
-      if (viewX > worldW - visibleW * 0.7) viewX = worldW - visibleW * 0.7;
-      if (viewY > worldH - visibleH * 0.7) viewY = worldH - visibleH * 0.7;
+      const padX = visibleW * 0.3;
+      const padY = visibleH * 0.3;
+      if (viewX < -padX) viewX = -padX;
+      if (viewY < -padY) viewY = -padY;
+      if (viewX > worldW - visibleW + padX) viewX = worldW - visibleW + padX;
+      if (viewY > worldH - visibleH + padY) viewY = worldH - visibleH + padY;
     }
 
     function isValidMap(m) {
@@ -167,7 +170,7 @@
       return { minX, minY, maxX, maxY, count, width: maxX-minX+1, height: maxY-minY+1 };
     }
 
-    // ---------- ОТРИСОВКА (свои + чужие надписи) ----------
+    // ---------- ОТРИСОВКА ----------
     function drawMap() {
       if (!isValidMap(map)) return;
       ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -207,7 +210,7 @@
         });
       }
 
-      // Надписи для всех владельцев территорий
+      // Надписи территорий
       const drawnOwners = new Set();
       for (let y=0; y<MAP_H; y++) {
         for (let x=0; x<MAP_W; x++) {
@@ -240,9 +243,11 @@
         legendColor.style.backgroundColor = currentPlayer.color;
         legendHashtag.textContent = '#' + currentPlayer.hashtag;
         homeBtn.style.display = 'block';
+        menuBtn.style.display = 'block';
       } else {
         legend.style.display = 'none';
         homeBtn.style.display = 'none';
+        menuBtn.style.display = 'none';
       }
       updateLeaderboard();
     }
@@ -259,7 +264,7 @@
 
     function updateInfo(text) { document.getElementById('info').textContent = text; }
 
-    // Анимация
+    // Анимация захвата
     function animateCapture(cells, serverMap) {
       if (!cells.length) {
         map = serverMap; updateAdjacentSet(); drawMap(); updateInfo(`Лайков: ${currentPlayer.likes}`);
@@ -274,7 +279,7 @@
       step();
     }
 
-    // Центрирование на своих клетках (без скачков)
+    // Центрирование на своих клетках (без clamp)
     function centerOnMyCells() {
       if (!currentPlayer.hashtag) return;
       const bounds = getTerritoryBounds(currentPlayer.id);
@@ -287,11 +292,53 @@
       const centerY = (bounds.minY+bounds.maxY)/2*CELL_SIZE + CELL_SIZE/2;
       viewX = centerX - canvas.width/(2*zoom);
       viewY = centerY - canvas.height/(2*zoom);
-      // Без clampView, потому что гарантированно в границах
       drawMap();
     }
     homeBtn.addEventListener('click', centerOnMyCells);
 
+    // Меню
+    menuBtn.addEventListener('click', async () => {
+      menuHashtag.textContent = '#' + currentPlayer.hashtag;
+      // Проверим возможность смены
+      try {
+        const res = await fetch(`${SERVER_URL}/canChange`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentPlayer.id })
+        }).then(r => r.json());
+        if (res.canChange) {
+          menuCanChange.textContent = 'Вы можете сменить хештег.';
+          changeHashtagBtn.disabled = false;
+        } else {
+          menuCanChange.textContent = `Смена недоступна. Осталось примерно ${res.hoursLeft} ч.`;
+          changeHashtagBtn.disabled = true;
+        }
+      } catch (e) {
+        menuCanChange.textContent = 'Ошибка проверки.';
+        changeHashtagBtn.disabled = true;
+      }
+      menuPanel.style.display = 'block';
+    });
+
+    document.getElementById('closeMenuBtn').addEventListener('click', () => {
+      menuPanel.style.display = 'none';
+    });
+
+    changeHashtagBtn.addEventListener('click', () => {
+      menuPanel.style.display = 'none';
+      // Показать выбор хештега (с занятыми)
+      fetch(`${SERVER_URL}/state`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentPlayer.id })
+      }).then(r => r.json()).then(data => {
+        playersInfo = data.playersInfo || {};
+        const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
+        showSelection(AVAILABLE_HASHTAGS, taken);
+      });
+    });
+
+    // Конвертация координат
     function screenToWorld(sx, sy) {
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width/rect.width, scaleY = canvas.height/rect.height;
@@ -302,14 +349,15 @@
       };
     }
 
-    // Drag без рывков
+    // ---------- DRAG (только левая кнопка) ----------
     let isDragging = false, dragStartX, dragStartY, dragStartViewX, dragStartViewY;
     canvas.addEventListener('mousedown', e => {
-      if (e.button === 0 && !e.ctrlKey) {
-        isDragging = true; dragStartX = e.clientX; dragStartY = e.clientY;
-        dragStartViewX = viewX; dragStartViewY = viewY;
-        canvas.style.cursor = 'grabbing'; e.preventDefault();
-      }
+      if (e.button !== 0) return; // только левая кнопка
+      isDragging = true;
+      dragStartX = e.clientX; dragStartY = e.clientY;
+      dragStartViewX = viewX; dragStartViewY = viewY;
+      canvas.style.cursor = 'grabbing';
+      e.preventDefault();
     });
     window.addEventListener('mousemove', e => {
       if (!isDragging) return;
@@ -318,9 +366,12 @@
       applyDragConstraints();
       drawMap();
     });
-    window.addEventListener('mouseup', () => { isDragging = false; canvas.style.cursor = 'default'; });
+    window.addEventListener('mouseup', () => {
+      isDragging = false;
+      canvas.style.cursor = 'default';
+    });
 
-    // Зум без ограничений (плавный)
+    // Зум (без clamp)
     canvas.addEventListener('wheel', e => {
       e.preventDefault();
       const rect = canvas.getBoundingClientRect();
@@ -329,9 +380,9 @@
       const worldX = (mx + viewX)/zoom, worldY = (my + viewY)/zoom;
       const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * (e.deltaY>0?0.9:1.1)));
       if (newZoom !== zoom) {
-        viewX = worldX*newZoom - mx; viewY = worldY*newZoom - my;
+        viewX = worldX*newZoom - mx;
+        viewY = worldY*newZoom - my;
         zoom = newZoom;
-        // Без clampView! Иначе сдвинет и вызовет прыжок
         drawMap();
       }
     });
@@ -365,7 +416,7 @@
     });
     canvas.addEventListener('touchend', e => { if (e.touches.length===0) { isDragging=false; lastTouches=null; } });
 
-    // Атака
+    // Атака (левая кнопка)
     canvas.addEventListener('click', e => {
       if (isDragging || animating || spectating) return;
       if (!currentPlayer.hashtag) return;
