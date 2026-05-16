@@ -41,7 +41,6 @@
     #gameover { display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:100; justify-content:center; align-items:center; flex-direction:column; color:white; font-size:24px; }
     button { margin:5px; padding:8px 12px; cursor:pointer; font-family:'Courier New',monospace; }
     input[type=range] { width:200px; }
-    /* улучшаем ползунок на тач-устройствах */
     @media (hover: none) and (pointer: coarse) {
       input[type=range] { width: 160px; height: 30px; }
     }
@@ -60,6 +59,7 @@
     <p id="menuStatus"></p>
     <p id="menuCanChange"></p>
     <button id="changeHashtagBtn">Сменить хештег</button>
+    <button id="releaseBtn">Освободить хештег</button>
     <button id="closeMenuBtn">Закрыть</button>
   </div>
   <div id="selection">
@@ -94,7 +94,7 @@
     const CELL_SIZE = 8;
     let MAP_W = 320;
     let MAP_H = 180;
-    const SERVER_URL = 'https://possible-wise-administration-engineer.trycloudflare.com'; // ваш адрес
+    const SERVER_URL = 'https://possible-wise-administration-engineer.trycloudflare.com'; // ваш актуальный адрес
 
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
@@ -117,6 +117,7 @@
     let adjacentSet = new Set();
     let leaderboard = [];
     let animating = false, animationQueue = [], animationTimer = null;
+    let hashtagLikes = {};   // глобальные лайки хештегов
 
     let viewX = 0, viewY = 0;
     let zoom = 1;
@@ -139,10 +140,10 @@
     const menuStatus = document.getElementById('menuStatus');
     const menuCanChange = document.getElementById('menuCanChange');
     const changeHashtagBtn = document.getElementById('changeHashtagBtn');
+    const releaseBtn = document.getElementById('releaseBtn');
     let selectedTarget = null;
     let clickTarget = null;
 
-    // Отключаем gesture-события только на canvas, чтобы не мешать ползункам
     canvas.addEventListener('gesturestart', e => e.preventDefault());
     canvas.addEventListener('gesturechange', e => e.preventDefault());
     canvas.addEventListener('gestureend', e => e.preventDefault());
@@ -244,7 +245,6 @@
       dragStartViewX = viewX;
       dragStartViewY = viewY;
       canvas.style.cursor = 'grabbing';
-
       const {x, y} = screenToWorld(e.clientX, e.clientY);
       clickTarget = (x >= 0 && x < MAP_W && y >= 0 && y < MAP_H) ? { x, y } : null;
       e.preventDefault();
@@ -290,7 +290,7 @@
       }
     });
 
-    // Тач-управление (аналогично)
+    // Тач-управление
     let lastTouches = null;
     canvas.addEventListener('touchstart', e => {
       e.preventDefault();
@@ -398,7 +398,7 @@
       }
     });
 
-    // ---------- ПАНЕЛЬ АТАКИ (с кнопками +/-) ----------
+    // ---------- ПАНЕЛЬ АТАКИ ----------
     function showAttackPanel(x, y) {
       selectedTarget = { x, y };
       targetCoords.textContent = `${x},${y}`;
@@ -411,7 +411,6 @@
     powerSlider.addEventListener('input', () => {
       powerValue.textContent = powerSlider.value;
     });
-
     document.getElementById('powerPlus').addEventListener('click', () => {
       if (parseInt(powerSlider.value) < currentPlayer.likes) {
         powerSlider.value = parseInt(powerSlider.value) + 1;
@@ -424,7 +423,6 @@
         powerValue.textContent = powerSlider.value;
       }
     });
-
     document.getElementById('attackBtn').addEventListener('click', () => {
       if (!selectedTarget || animating) return;
       attackCell(selectedTarget.x, selectedTarget.y, Number(powerSlider.value));
@@ -432,13 +430,13 @@
     });
     document.getElementById('cancelAttackBtn').addEventListener('click', hideAttackPanel);
 
-    // ---------- МЕНЮ (доступно всем, вкл. наблюдателя) ----------
+    // ---------- МЕНЮ ----------
     menuBtn.addEventListener('click', async () => {
-      // Обновляем статус
       if (currentPlayer.hashtag) {
         menuStatus.textContent = 'Вы играете за: ' + currentPlayer.hashtag;
         changeHashtagBtn.style.display = 'inline-block';
         changeHashtagBtn.textContent = 'Сменить хештег';
+        releaseBtn.style.display = 'inline-block';
         try {
           const res = await fetch(`${SERVER_URL}/canChange`, {
             method: 'POST',
@@ -462,6 +460,7 @@
         changeHashtagBtn.style.display = 'inline-block';
         changeHashtagBtn.textContent = 'Выбрать хештег';
         changeHashtagBtn.disabled = false;
+        releaseBtn.style.display = 'none';
       }
       menuPanel.style.display = 'block';
     });
@@ -470,28 +469,49 @@
       menuPanel.style.display = 'none';
     });
 
+    releaseBtn.addEventListener('click', async () => {
+      if (!currentPlayer.hashtag) return;
+      try {
+        const res = await fetch(`${SERVER_URL}/release`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentPlayer.id })
+        }).then(r => r.json());
+        if (res.success) {
+          currentPlayer.hashtag = null;
+          currentPlayer.likes = 0;
+          applyServerResponse(res, null);
+          menuPanel.style.display = 'none';
+          updateInfo('Хештег освобождён. Ваши клетки стали нейтральными.');
+        } else {
+          alert(res.error);
+        }
+      } catch (e) {
+        alert('Ошибка сети');
+      }
+    });
+
     changeHashtagBtn.addEventListener('click', () => {
       menuPanel.style.display = 'none';
       if (currentPlayer.hashtag) {
-        // Проверка возможности смены была сделана выше, запрос /canChange уже выполнен
-        // Показываем выбор хештега
         fetch(`${SERVER_URL}/state`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: currentPlayer.id })
         }).then(r => r.json()).then(data => {
           playersInfo = data.playersInfo || {};
+          hashtagLikes = data.hashtagLikes || {};
           const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
           showSelection(AVAILABLE_HASHTAGS, taken);
         });
       } else {
-        // Наблюдатель: просто показать выбор хештега
         fetch(`${SERVER_URL}/state`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: currentPlayer.id })
         }).then(r => r.json()).then(data => {
           playersInfo = data.playersInfo || {};
+          hashtagLikes = data.hashtagLikes || {};
           const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
           showSelection(AVAILABLE_HASHTAGS, taken);
         });
@@ -508,6 +528,7 @@
       if (data.playersInfo) playersInfo = data.playersInfo;
       if (data.worldW) MAP_W = data.worldW; if (data.worldH) MAP_H = data.worldH;
       if (data.leaderboard) leaderboard = data.leaderboard;
+      if (data.hashtagLikes) hashtagLikes = data.hashtagLikes;
 
       if (currentPlayer.hashtag && data.defeatedPlayerId === currentPlayer.id) {
         currentPlayer.hashtag = null;
@@ -530,7 +551,7 @@
         if (res.success) {
           currentPlayer.color = res.player.color;
           currentPlayer.spawnX = res.player.spawnX; currentPlayer.spawnY = res.player.spawnY;
-          spectating = false; // вышли из наблюдения
+          spectating = false;
           applyServerResponse(res, null);
           hideSelection();
         } else alert(res.error);
@@ -540,14 +561,14 @@
     function attackCell(x, y, amount) {
       fetch(`${SERVER_URL}/attack`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:currentPlayer.id, x, y, amount}) })
       .then(r=>r.json()).then(res => {
-  if (res.success) {
-    updateInfo(`Захвачено ${res.capturedCells.length} клеток, потрачено ${res.spent} лайков`);
-    applyServerResponse(res, res.capturedCells);
-  } else {
-    updateInfo(`Ошибка: ${res.error}`);
-    applyServerResponse(res, null);
-  }
-});
+        if (res.success) {
+          updateInfo(`Захвачено ${res.capturedCells.length} клеток, потрачено ${res.spent} лайков`);
+          applyServerResponse(res, res.capturedCells);
+        } else {
+          updateInfo(`Ошибка: ${res.error}`);
+          applyServerResponse(res, null);
+        }
+      });
     }
 
     function fetchState() {
@@ -573,7 +594,8 @@
       listDiv.innerHTML = '';
       hashtags.forEach(tag => {
         const btn = document.createElement('button');
-        btn.textContent = '#' + tag;
+        const likes = hashtagLikes[tag] || 0;
+        btn.textContent = `#${tag} (${likes})`;
         if (takenHashtags?.includes(tag)) {
           btn.classList.add('taken');
           btn.disabled = true;
@@ -650,7 +672,6 @@
         }
       }
       ctx.textAlign = 'start';
-
       ctx.restore();
 
       // Указатель направления
@@ -683,7 +704,6 @@
         }
       }
 
-      // Кнопка меню видна всегда, если есть ID (даже в наблюдении)
       if (currentPlayer.id) {
         menuBtn.style.display = 'block';
       } else {
@@ -726,7 +746,7 @@
       step();
     }
 
-        // ---------- ИНИЦИАЛИЗАЦИЯ (с детектором ошибок) ----------
+    // ---------- ИНИЦИАЛИЗАЦИЯ ----------
     vkBridge.send('VKWebAppInit')
       .then(() => vkBridge.send('VKWebAppGetUserInfo'))
       .then(data => {
@@ -749,17 +769,18 @@
         MAP_W = state.worldW || MAP_W;
         MAP_H = state.worldH || MAP_H;
         leaderboard = state.leaderboard || [];
+        hashtagLikes = state.hashtagLikes || {};
         applyServerResponse(state, null);
         if (!currentPlayer.hashtag && !spectating) {
           const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
-          showSelection(AVAILABLE_HASHTAGS || [], taken);
+          showSelection(AVAILABLE_HASHTAGS, taken);
         }
         resizeCanvas();
+        setInterval(fetchState, 10000);    // <--- теперь автообновление работает
       })
       .catch(err => {
         updateInfo('⚠️ Нет связи с сервером: ' + err.message);
         console.error(err);
-        // Всё равно показать карту, чтобы не было пустого экрана
         resizeCanvas();
         drawMap();
       });
