@@ -70,7 +70,7 @@
   </div>
   <div id="attackPanel">
     <div>Цель: <span id="targetCoords"></span></div>
-    <div>Захватить клеток: <span id="powerValue">1</span></div>
+    <div>Сила атаки: <span id="powerValue">1</span></div>
     <div id="attackControls">
       <button id="powerMinus">-</button>
       <input type="range" id="powerSlider" min="1" max="1" value="1">
@@ -539,10 +539,15 @@
 
     function attackCell(x, y, amount) {
       fetch(`${SERVER_URL}/attack`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:currentPlayer.id, x, y, amount}) })
-      .then(r=>r.json()).then(res=>{
-        if (res.success) applyServerResponse(res, res.capturedCells);
-        else { updateInfo(`Ошибка: ${res.error}`); applyServerResponse(res, null); }
-      });
+      .then(r=>r.json()).then(res => {
+  if (res.success) {
+    updateInfo(`Захвачено ${res.capturedCells.length} клеток, потрачено ${res.spent} лайков`);
+    applyServerResponse(res, res.capturedCells);
+  } else {
+    updateInfo(`Ошибка: ${res.error}`);
+    applyServerResponse(res, null);
+  }
+});
     }
 
     function fetchState() {
