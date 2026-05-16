@@ -10,7 +10,6 @@
       font-family: 'Courier New', monospace;
       overflow: hidden;
       touch-action: manipulation;
-      /* убираем возможный скролл */
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     }
     #canvasContainer {
@@ -19,7 +18,6 @@
     }
     canvas {
       display: block;
-      /* убираем max-width/max-height, чтобы канвас растягивался на весь контейнер */
       width: 100%; height: 100%;
       touch-action: none;
     }
@@ -85,17 +83,15 @@
   <script>
     // ---------- НАСТРОЙКИ ----------
     const CELL_SIZE = 8;
-    let MAP_W = 320;   // 16:9
+    let MAP_W = 320;
     let MAP_H = 180;
-    const SERVER_URL = 'https://identifies-insertion-appreciated-providence.trycloudflare.com'; // замените
+    const SERVER_URL = 'https://identifies-insertion-appreciated-providence.trycloudflare.com'; // ваш актуальный адрес
 
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
-    // ---------- АДАПТИВНЫЙ РАЗМЕР КАНВАСА ----------
     function resizeCanvas() {
       const container = document.getElementById('canvasContainer');
-      // Берём точные пиксели контейнера
       canvas.width = container.clientWidth;
       canvas.height = container.clientHeight;
       clampCamera();
@@ -112,7 +108,10 @@
     let adjacentSet = new Set();
     let leaderboard = [];
     let animating = false, animationQueue = [], animationTimer = null;
-    let viewX = 0, viewY = 0, zoom = 1;
+
+    // ----- КАМЕРА (исправленная система координат) -----
+    let viewX = 0, viewY = 0;   // мировые координаты
+    let zoom = 1;
     const MIN_ZOOM = 0.3, MAX_ZOOM = 5;
     let spectating = false;
 
@@ -140,17 +139,15 @@
     document.addEventListener('gestureend', e => e.preventDefault());
     canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-    // ---------- МЯГКИЕ ГРАНИЦЫ (чтобы не потерять карту) ----------
+    // ---------- ГРАНИЦЫ КАМЕРЫ (мировые координаты) ----------
     function clampCamera() {
       const worldW = MAP_W * CELL_SIZE;
       const worldH = MAP_H * CELL_SIZE;
       const visibleW = canvas.width / zoom;
       const visibleH = canvas.height / zoom;
-
-      // Разрешаем выходить за край на 50% видимой области
+      // можно выходить за край на 50% экрана
       const padX = visibleW * 0.5;
       const padY = visibleH * 0.5;
-
       viewX = Math.max(-padX, Math.min(viewX, worldW - visibleW + padX));
       viewY = Math.max(-padY, Math.min(viewY, worldH - visibleH + padY));
     }
@@ -210,24 +207,24 @@
       return bestCell;
     }
 
-    // ---------- ПРЕОБРАЗОВАНИЕ КООРДИНАТ С УЧЁТОМ АДАПТИВНОСТИ ----------
+    // ---------- ПРЕОБРАЗОВАНИЕ КООРДИНАТ (ИСПРАВЛЕНО) ----------
     function screenToWorld(sx, sy) {
       const rect = canvas.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return { x: -1, y: -1 };
-      // Коэффициенты пересчёта: canvas.width/rect.width учитывает масштаб канваса в CSS
       const scaleX = canvas.width / rect.width;
       const scaleY = canvas.height / rect.height;
       const canvasX = (sx - rect.left) * scaleX;
       const canvasY = (sy - rect.top) * scaleY;
-      const worldX = (canvasX + viewX) / zoom;
-      const worldY = (canvasY + viewY) / zoom;
+      // мир = canvas / zoom + view
+      const worldX = canvasX / zoom + viewX;
+      const worldY = canvasY / zoom + viewY;
       return {
         x: Math.floor(worldX / CELL_SIZE),
         y: Math.floor(worldY / CELL_SIZE)
       };
     }
 
-    // ---------- УПРАВЛЕНИЕ КАМЕРОЙ (свободное, но с мягкими границами) ----------
+    // ---------- УПРАВЛЕНИЕ КАМЕРОЙ (с исправленной логикой) ----------
     const DRAG_THRESHOLD = 4;
     let isDragging = false, hasMoved = false;
     let dragStartX, dragStartY, dragStartViewX, dragStartViewY;
@@ -254,12 +251,12 @@
       if (!hasMoved && Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
       hasMoved = true;
 
-      // Учитываем масштабный коэффициент, чтобы движение мыши соответствовало движению мира
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / (rect.width || 1);
       const scaleY = canvas.height / (rect.height || 1);
-      viewX = dragStartViewX - dx * scaleX / zoom;
-      viewY = dragStartViewY - dy * scaleY / zoom;
+      // движение мыши в пикселях канваса, пересчитываем в мировые
+      viewX = dragStartViewX - (dx * scaleX) / zoom;
+      viewY = dragStartViewY - (dy * scaleY) / zoom;
       clampCamera();
       drawMap();
     });
@@ -277,19 +274,21 @@
       const scaleY = canvas.height / rect.height;
       const mx = (e.clientX - rect.left) * scaleX;
       const my = (e.clientY - rect.top) * scaleY;
-      const worldX = (mx + viewX) / zoom;
-      const worldY = (my + viewY) / zoom;
+      // world до зума
+      const worldX = mx / zoom + viewX;
+      const worldY = my / zoom + viewY;
       const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * (e.deltaY > 0 ? 0.9 : 1.1)));
       if (newZoom !== zoom) {
-        viewX = worldX * newZoom - mx;
-        viewY = worldY * newZoom - my;
+        // обновляем view так, чтобы world осталась под мышью
+        viewX = worldX - mx / newZoom;
+        viewY = worldY - my / newZoom;
         zoom = newZoom;
         clampCamera();
         drawMap();
       }
     });
 
-    // Тач-управление (аналогично с масштабом)
+    // Тач-управление (аналогично исправлено)
     let lastTouches = null;
     canvas.addEventListener('touchstart', e => {
       e.preventDefault();
@@ -325,8 +324,8 @@
         const rect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / (rect.width || 1);
         const scaleY = canvas.height / (rect.height || 1);
-        viewX = dragStartViewX - dx * scaleX / zoom;
-        viewY = dragStartViewY - dy * scaleY / zoom;
+        viewX = dragStartViewX - (dx * scaleX) / zoom;
+        viewY = dragStartViewY - (dy * scaleY) / zoom;
         clampCamera();
         drawMap();
       } else if (t.length === 2 && lastTouches) {
@@ -338,11 +337,11 @@
         const sy = canvas.height / (rect.height || 1);
         const cx = (lastTouches.cx - rect.left) * sx;
         const cy = (lastTouches.cy - rect.top) * sy;
-        const worldX = (cx + lastTouches.viewX) / lastTouches.zoom;
-        const worldY = (cy + lastTouches.viewY) / lastTouches.zoom;
+        const worldX = cx / lastTouches.zoom + lastTouches.viewX;
+        const worldY = cy / lastTouches.zoom + lastTouches.viewY;
         zoom = newZoom;
-        viewX = worldX * zoom - cx;
-        viewY = worldY * zoom - cy;
+        viewX = worldX - cx / newZoom;
+        viewY = worldY - cy / newZoom;
         lastTouches = { dist: newDist, cx: lastTouches.cx, cy: lastTouches.cy, viewX, viewY, zoom };
         clampCamera();
         drawMap();
@@ -386,12 +385,13 @@
       const scaleY = canvas.height / (rect.height || 1);
       const mx = (e.clientX - rect.left) * scaleX;
       const my = (e.clientY - rect.top) * scaleY;
-      const worldX = (mx + viewX) / zoom;
-      const worldY = (my + viewY) / zoom;
+      const worldX = mx / zoom + viewX;
+      const worldY = my / zoom + viewY;
       const closest = findClosestOwnCell(worldX, worldY);
       if (closest) {
-        viewX = closest.worldX * zoom - canvas.width / 2;
-        viewY = closest.worldY * zoom - canvas.height / 2;
+        // центрируем камеру на клетке
+        viewX = closest.worldX - canvas.width / (2 * zoom);
+        viewY = closest.worldY - canvas.height / (2 * zoom);
         clampCamera();
         drawMap();
       }
@@ -539,13 +539,15 @@
     function hideSelection() { selectionDiv.style.display = 'none'; }
     document.getElementById('gameoverSpectate').addEventListener('click', spectate);
 
-    // ---------- ОТРИСОВКА (без изменений) ----------
+    // ---------- ОТРИСОВКА (исправленный порядок трансформаций) ----------
     function drawMap() {
       if (!isValidMap(map)) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Правильный порядок: scale, затем translate
       ctx.save();
-      ctx.translate(-viewX, -viewY);
       ctx.scale(zoom, zoom);
+      ctx.translate(-viewX, -viewY);
 
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, MAP_W * CELL_SIZE, MAP_H * CELL_SIZE);
@@ -599,14 +601,15 @@
         }
       }
       ctx.textAlign = 'start';
+
       ctx.restore();
 
-      // Указатель направления
+      // Указатель направления (рисуем в экранных координатах, без трансформаций)
       if (currentPlayer.id && currentPlayer.hashtag) {
         const arrowX = canvas.width / 2;
         const arrowY = canvas.height - 60;
-        const worldX = (arrowX + viewX) / zoom;
-        const worldY = (arrowY + viewY) / zoom;
+        const worldX = arrowX / zoom + viewX;
+        const worldY = arrowY / zoom + viewY;
         const closest = findClosestOwnCell(worldX, worldY);
         if (closest) {
           const dx = closest.worldX - worldX;
