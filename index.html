@@ -41,6 +41,11 @@
     #gameover { display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:100; justify-content:center; align-items:center; flex-direction:column; color:white; font-size:24px; }
     button { margin:5px; padding:8px 12px; cursor:pointer; font-family:'Courier New',monospace; }
     input[type=range] { width:200px; }
+    /* улучшаем ползунок на тач-устройствах */
+    @media (hover: none) and (pointer: coarse) {
+      input[type=range] { width: 160px; height: 30px; }
+    }
+    #attackControls { display: flex; align-items: center; justify-content: center; gap: 8px; }
   </style>
 </head>
 <body>
@@ -52,7 +57,7 @@
   <button id="menuBtn" title="Меню">⚙️</button>
   <div id="leaderboard"></div>
   <div id="menuPanel">
-    <p>Вы играете за: <strong><span id="menuHashtag"></span></strong></p>
+    <p id="menuStatus"></p>
     <p id="menuCanChange"></p>
     <button id="changeHashtagBtn">Сменить хештег</button>
     <button id="closeMenuBtn">Закрыть</button>
@@ -66,7 +71,11 @@
   <div id="attackPanel">
     <div>Цель: <span id="targetCoords"></span></div>
     <div>Захватить клеток: <span id="powerValue">1</span></div>
-    <input type="range" id="powerSlider" min="1" max="1" value="1">
+    <div id="attackControls">
+      <button id="powerMinus">-</button>
+      <input type="range" id="powerSlider" min="1" max="1" value="1">
+      <button id="powerPlus">+</button>
+    </div>
     <br>
     <button id="attackBtn">Атаковать</button>
     <button id="cancelAttackBtn">Отмена</button>
@@ -85,7 +94,7 @@
     const CELL_SIZE = 8;
     let MAP_W = 320;
     let MAP_H = 180;
-    const SERVER_URL = 'https://identifies-insertion-appreciated-providence.trycloudflare.com'; // ваш актуальный адрес
+    const SERVER_URL = 'https://identifies-insertion-appreciated-providence.trycloudflare.com'; // ваш адрес
 
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
@@ -109,8 +118,7 @@
     let leaderboard = [];
     let animating = false, animationQueue = [], animationTimer = null;
 
-    // ----- КАМЕРА (исправленная система координат) -----
-    let viewX = 0, viewY = 0;   // мировые координаты
+    let viewX = 0, viewY = 0;
     let zoom = 1;
     const MIN_ZOOM = 0.3, MAX_ZOOM = 5;
     let spectating = false;
@@ -128,24 +136,24 @@
     const gameoverDiv = document.getElementById('gameover');
     const menuBtn = document.getElementById('menuBtn');
     const menuPanel = document.getElementById('menuPanel');
-    const menuHashtag = document.getElementById('menuHashtag');
+    const menuStatus = document.getElementById('menuStatus');
     const menuCanChange = document.getElementById('menuCanChange');
     const changeHashtagBtn = document.getElementById('changeHashtagBtn');
     let selectedTarget = null;
     let clickTarget = null;
 
-    document.addEventListener('gesturestart', e => e.preventDefault());
-    document.addEventListener('gesturechange', e => e.preventDefault());
-    document.addEventListener('gestureend', e => e.preventDefault());
+    // Отключаем gesture-события только на canvas, чтобы не мешать ползункам
+    canvas.addEventListener('gesturestart', e => e.preventDefault());
+    canvas.addEventListener('gesturechange', e => e.preventDefault());
+    canvas.addEventListener('gestureend', e => e.preventDefault());
     canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-    // ---------- ГРАНИЦЫ КАМЕРЫ (мировые координаты) ----------
+    // ---------- ГРАНИЦЫ КАМЕРЫ ----------
     function clampCamera() {
       const worldW = MAP_W * CELL_SIZE;
       const worldH = MAP_H * CELL_SIZE;
       const visibleW = canvas.width / zoom;
       const visibleH = canvas.height / zoom;
-      // можно выходить за край на 50% экрана
       const padX = visibleW * 0.5;
       const padY = visibleH * 0.5;
       viewX = Math.max(-padX, Math.min(viewX, worldW - visibleW + padX));
@@ -207,7 +215,6 @@
       return bestCell;
     }
 
-    // ---------- ПРЕОБРАЗОВАНИЕ КООРДИНАТ (ИСПРАВЛЕНО) ----------
     function screenToWorld(sx, sy) {
       const rect = canvas.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return { x: -1, y: -1 };
@@ -215,7 +222,6 @@
       const scaleY = canvas.height / rect.height;
       const canvasX = (sx - rect.left) * scaleX;
       const canvasY = (sy - rect.top) * scaleY;
-      // мир = canvas / zoom + view
       const worldX = canvasX / zoom + viewX;
       const worldY = canvasY / zoom + viewY;
       return {
@@ -224,7 +230,7 @@
       };
     }
 
-    // ---------- УПРАВЛЕНИЕ КАМЕРОЙ (с исправленной логикой) ----------
+    // ---------- УПРАВЛЕНИЕ КАМЕРОЙ ----------
     const DRAG_THRESHOLD = 4;
     let isDragging = false, hasMoved = false;
     let dragStartX, dragStartY, dragStartViewX, dragStartViewY;
@@ -250,11 +256,9 @@
       const dy = e.clientY - dragStartY;
       if (!hasMoved && Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
       hasMoved = true;
-
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / (rect.width || 1);
       const scaleY = canvas.height / (rect.height || 1);
-      // движение мыши в пикселях канваса, пересчитываем в мировые
       viewX = dragStartViewX - (dx * scaleX) / zoom;
       viewY = dragStartViewY - (dy * scaleY) / zoom;
       clampCamera();
@@ -274,12 +278,10 @@
       const scaleY = canvas.height / rect.height;
       const mx = (e.clientX - rect.left) * scaleX;
       const my = (e.clientY - rect.top) * scaleY;
-      // world до зума
       const worldX = mx / zoom + viewX;
       const worldY = my / zoom + viewY;
       const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * (e.deltaY > 0 ? 0.9 : 1.1)));
       if (newZoom !== zoom) {
-        // обновляем view так, чтобы world осталась под мышью
         viewX = worldX - mx / newZoom;
         viewY = worldY - my / newZoom;
         zoom = newZoom;
@@ -288,7 +290,7 @@
       }
     });
 
-    // Тач-управление (аналогично исправлено)
+    // Тач-управление (аналогично)
     let lastTouches = null;
     canvas.addEventListener('touchstart', e => {
       e.preventDefault();
@@ -389,7 +391,6 @@
       const worldY = my / zoom + viewY;
       const closest = findClosestOwnCell(worldX, worldY);
       if (closest) {
-        // центрируем камеру на клетке
         viewX = closest.worldX - canvas.width / (2 * zoom);
         viewY = closest.worldY - canvas.height / (2 * zoom);
         clampCamera();
@@ -397,7 +398,7 @@
       }
     });
 
-    // ---------- ПАНЕЛЬ АТАКИ ----------
+    // ---------- ПАНЕЛЬ АТАКИ (с кнопками +/-) ----------
     function showAttackPanel(x, y) {
       selectedTarget = { x, y };
       targetCoords.textContent = `${x},${y}`;
@@ -407,7 +408,23 @@
       attackPanel.style.display = 'block';
     }
     function hideAttackPanel() { attackPanel.style.display = 'none'; selectedTarget = null; }
-    powerSlider.addEventListener('input', () => powerValue.textContent = powerSlider.value);
+    powerSlider.addEventListener('input', () => {
+      powerValue.textContent = powerSlider.value;
+    });
+
+    document.getElementById('powerPlus').addEventListener('click', () => {
+      if (parseInt(powerSlider.value) < currentPlayer.likes) {
+        powerSlider.value = parseInt(powerSlider.value) + 1;
+        powerValue.textContent = powerSlider.value;
+      }
+    });
+    document.getElementById('powerMinus').addEventListener('click', () => {
+      if (parseInt(powerSlider.value) > 1) {
+        powerSlider.value = parseInt(powerSlider.value) - 1;
+        powerValue.textContent = powerSlider.value;
+      }
+    });
+
     document.getElementById('attackBtn').addEventListener('click', () => {
       if (!selectedTarget || animating) return;
       attackCell(selectedTarget.x, selectedTarget.y, Number(powerSlider.value));
@@ -415,42 +432,70 @@
     });
     document.getElementById('cancelAttackBtn').addEventListener('click', hideAttackPanel);
 
-    // ---------- МЕНЮ ----------
+    // ---------- МЕНЮ (доступно всем, вкл. наблюдателя) ----------
     menuBtn.addEventListener('click', async () => {
-      menuHashtag.textContent = '#' + currentPlayer.hashtag;
-      try {
-        const res = await fetch(`${SERVER_URL}/canChange`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: currentPlayer.id })
-        }).then(r => r.json());
-        if (res.canChange) {
-          menuCanChange.textContent = 'Вы можете сменить хештег.';
-          changeHashtagBtn.disabled = false;
-        } else {
-          menuCanChange.textContent = `Смена недоступна. Осталось примерно ${res.hoursLeft} ч.`;
+      // Обновляем статус
+      if (currentPlayer.hashtag) {
+        menuStatus.textContent = 'Вы играете за: ' + currentPlayer.hashtag;
+        changeHashtagBtn.style.display = 'inline-block';
+        changeHashtagBtn.textContent = 'Сменить хештег';
+        try {
+          const res = await fetch(`${SERVER_URL}/canChange`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: currentPlayer.id })
+          }).then(r => r.json());
+          if (res.canChange) {
+            menuCanChange.textContent = 'Вы можете сменить хештег.';
+            changeHashtagBtn.disabled = false;
+          } else {
+            menuCanChange.textContent = `Смена недоступна. Осталось примерно ${res.hoursLeft} ч.`;
+            changeHashtagBtn.disabled = true;
+          }
+        } catch (e) {
+          menuCanChange.textContent = 'Ошибка проверки.';
           changeHashtagBtn.disabled = true;
         }
-      } catch (e) {
-        menuCanChange.textContent = 'Ошибка проверки.';
-        changeHashtagBtn.disabled = true;
+      } else {
+        menuStatus.textContent = 'Режим наблюдателя';
+        menuCanChange.textContent = '';
+        changeHashtagBtn.style.display = 'inline-block';
+        changeHashtagBtn.textContent = 'Выбрать хештег';
+        changeHashtagBtn.disabled = false;
       }
       menuPanel.style.display = 'block';
     });
+
     document.getElementById('closeMenuBtn').addEventListener('click', () => {
       menuPanel.style.display = 'none';
     });
+
     changeHashtagBtn.addEventListener('click', () => {
       menuPanel.style.display = 'none';
-      fetch(`${SERVER_URL}/state`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentPlayer.id })
-      }).then(r => r.json()).then(data => {
-        playersInfo = data.playersInfo || {};
-        const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
-        showSelection(AVAILABLE_HASHTAGS, taken);
-      });
+      if (currentPlayer.hashtag) {
+        // Проверка возможности смены была сделана выше, запрос /canChange уже выполнен
+        // Показываем выбор хештега
+        fetch(`${SERVER_URL}/state`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentPlayer.id })
+        }).then(r => r.json()).then(data => {
+          playersInfo = data.playersInfo || {};
+          const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
+          showSelection(AVAILABLE_HASHTAGS, taken);
+        });
+      } else {
+        // Наблюдатель: просто показать выбор хештега
+        fetch(`${SERVER_URL}/state`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentPlayer.id })
+        }).then(r => r.json()).then(data => {
+          playersInfo = data.playersInfo || {};
+          const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
+          showSelection(AVAILABLE_HASHTAGS, taken);
+        });
+      }
     });
 
     // ---------- СЕРВЕРНЫЕ ЗАПРОСЫ ----------
@@ -485,6 +530,7 @@
         if (res.success) {
           currentPlayer.color = res.player.color;
           currentPlayer.spawnX = res.player.spawnX; currentPlayer.spawnY = res.player.spawnY;
+          spectating = false; // вышли из наблюдения
           applyServerResponse(res, null);
           hideSelection();
         } else alert(res.error);
@@ -539,12 +585,10 @@
     function hideSelection() { selectionDiv.style.display = 'none'; }
     document.getElementById('gameoverSpectate').addEventListener('click', spectate);
 
-    // ---------- ОТРИСОВКА (исправленный порядок трансформаций) ----------
+    // ---------- ОТРИСОВКА ----------
     function drawMap() {
       if (!isValidMap(map)) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Правильный порядок: scale, затем translate
       ctx.save();
       ctx.scale(zoom, zoom);
       ctx.translate(-viewX, -viewY);
@@ -604,7 +648,7 @@
 
       ctx.restore();
 
-      // Указатель направления (рисуем в экранных координатах, без трансформаций)
+      // Указатель направления
       if (currentPlayer.id && currentPlayer.hashtag) {
         const arrowX = canvas.width / 2;
         const arrowY = canvas.height - 60;
@@ -634,14 +678,19 @@
         }
       }
 
+      // Кнопка меню видна всегда, если есть ID (даже в наблюдении)
+      if (currentPlayer.id) {
+        menuBtn.style.display = 'block';
+      } else {
+        menuBtn.style.display = 'none';
+      }
+
       if (currentPlayer.id && currentPlayer.hashtag) {
         legend.style.display = 'flex';
         legendColor.style.backgroundColor = currentPlayer.color;
         legendHashtag.textContent = '#' + currentPlayer.hashtag;
-        menuBtn.style.display = 'block';
       } else {
         legend.style.display = 'none';
-        menuBtn.style.display = 'none';
       }
       updateLeaderboard();
     }
