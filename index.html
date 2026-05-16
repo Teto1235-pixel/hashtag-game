@@ -481,6 +481,7 @@
           currentPlayer.hashtag = null;
           currentPlayer.likes = 0;
           applyServerResponse(res, null);
+          setTimeout(() => fetchState(), 1000);
           menuPanel.style.display = 'none';
           updateInfo('Хештег освобождён. Ваши клетки стали нейтральными.');
         } else {
@@ -589,28 +590,58 @@
       });
     }
 
-    function showSelection(hashtags, takenHashtags) {
-      const listDiv = document.getElementById('hashtagList');
-      listDiv.innerHTML = '';
-      hashtags.forEach(tag => {
-        const btn = document.createElement('button');
-        const likes = hashtagLikes[tag] || 0;
-        btn.textContent = `#${tag} (${likes})`;
-        if (takenHashtags?.includes(tag)) {
-          btn.classList.add('taken');
-          btn.disabled = true;
-          btn.title = 'Хештег занят';
-        } else {
-          btn.onclick = () => claimHashtag(tag);
-        }
-        listDiv.appendChild(btn);
-      });
-      document.getElementById('spectateBtn').onclick = spectate;
-      selectionDiv.style.display = 'block';
-    }
+    let selectionRefreshInterval = null;
 
-    function hideSelection() { selectionDiv.style.display = 'none'; }
-    document.getElementById('gameoverSpectate').addEventListener('click', spectate);
+function showSelection(hashtags, takenHashtags) {
+  const listDiv = document.getElementById('hashtagList');
+  const spectateBtn = document.getElementById('spectateBtn');
+
+  function buildList(likesData) {
+    listDiv.innerHTML = '';
+    hashtags.forEach(tag => {
+      const btn = document.createElement('button');
+      const likes = likesData[tag] || 0;
+      btn.textContent = `#${tag} (${likes})`;
+      if (takenHashtags?.includes(tag)) {
+        btn.classList.add('taken');
+        btn.disabled = true;
+        btn.title = 'Хештег занят';
+      } else {
+        btn.onclick = () => claimHashtag(tag);
+      }
+      listDiv.appendChild(btn);
+    });
+  }
+
+  buildList(hashtagLikes);  // первоначальное построение
+
+  // Запускаем интервал обновления лайков
+  if (selectionRefreshInterval) clearInterval(selectionRefreshInterval);
+  selectionRefreshInterval = setInterval(async () => {
+    try {
+      const res = await fetch(`${SERVER_URL}/state`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentPlayer.id })
+      }).then(r => r.json());
+      if (res.hashtagLikes) {
+        hashtagLikes = res.hashtagLikes;   // обновили глобальный объект
+        buildList(hashtagLikes);           // перерисовали кнопки
+      }
+    } catch (e) { /* игнорируем ошибки */ }
+  }, 5000);
+
+  spectateBtn.onclick = spectate;
+  selectionDiv.style.display = 'block';
+}
+
+function hideSelection() {
+  if (selectionRefreshInterval) {
+    clearInterval(selectionRefreshInterval);
+    selectionRefreshInterval = null;
+  }
+  selectionDiv.style.display = 'none';
+}
 
     // ---------- ОТРИСОВКА ----------
     function drawMap() {
@@ -632,16 +663,19 @@
             ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
           }
           else if (cell.hashtag) {
-        ctx.fillStyle = '#d9d9d9';                    // светло-серый
-        ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-        // хештег белым или чёрным? используем чёрный полупрозрачный
-        ctx.fillStyle = 'rgba(0,0,0,0.4)';
-        ctx.font = `${Math.max(4, CELL_SIZE * 0.5)}px "Courier New", monospace`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(cell.hashtag, x * CELL_SIZE + CELL_SIZE/2, y * CELL_SIZE + CELL_SIZE/2);
-        ctx.textAlign = 'start';
-      }
+  ctx.fillStyle = '#b0b0b0';                      // более заметный серый
+  ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+  ctx.fillStyle = 'white';
+  ctx.shadowColor = 'black';
+  ctx.shadowBlur = 2;
+  ctx.font = `bold ${Math.max(5, CELL_SIZE * 0.6)}px "Courier New", monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(cell.hashtag, x * CELL_SIZE + CELL_SIZE/2, y * CELL_SIZE + CELL_SIZE/2);
+  ctx.shadowColor = 'transparent';   // сброс тени
+  ctx.shadowBlur = 0;
+  ctx.textAlign = 'start';
+}
         }
       }
 
