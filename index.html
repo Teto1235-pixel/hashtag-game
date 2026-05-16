@@ -721,19 +721,28 @@
       step();
     }
 
-    // ---------- ИНИЦИАЛИЗАЦИЯ ----------
+        // ---------- ИНИЦИАЛИЗАЦИЯ (с детектором ошибок) ----------
     vkBridge.send('VKWebAppInit')
       .then(() => vkBridge.send('VKWebAppGetUserInfo'))
       .then(data => {
         currentPlayer.id = data.id;
-        updateInfo(`Привет, ${data.first_name}!`);
-        return fetch(`${SERVER_URL}/join`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId: data.id}) });
+        updateInfo(`Привет, ${data.first_name}! Соединяюсь с сервером...`);
+        return fetch(`${SERVER_URL}/join`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: data.id })
+        });
       })
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`Ошибка сервера: ${r.status}`);
+        return r.json();
+      })
       .then(state => {
         currentPlayer.color = state.player.color;
-        currentPlayer.spawnX = state.player.spawnX; currentPlayer.spawnY = state.player.spawnY;
-        MAP_W = state.worldW || MAP_W; MAP_H = state.worldH || MAP_H;
+        currentPlayer.spawnX = state.player.spawnX;
+        currentPlayer.spawnY = state.player.spawnY;
+        MAP_W = state.worldW || MAP_W;
+        MAP_H = state.worldH || MAP_H;
         leaderboard = state.leaderboard || [];
         applyServerResponse(state, null);
         if (!currentPlayer.hashtag && !spectating) {
@@ -742,11 +751,13 @@
         }
         resizeCanvas();
       })
-      .catch(err => { updateInfo('Ошибка: '+err); console.error(err); });
-
-    setInterval(fetchState, 10000);
-    resizeCanvas();
-    drawMap();
+      .catch(err => {
+        updateInfo('⚠️ Нет связи с сервером: ' + err.message);
+        console.error(err);
+        // Всё равно показать карту, чтобы не было пустого экрана
+        resizeCanvas();
+        drawMap();
+      });
 
     const AVAILABLE_HASHTAGS = [
       'Azur_lane', 'Girls_Frontline', 'Arknights', 'Fate',
