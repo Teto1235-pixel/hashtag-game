@@ -631,6 +631,17 @@
             ctx.fillStyle = info ? info.color : '#cccccc';
             ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
           }
+          else if (cell.hashtag) {
+        ctx.fillStyle = '#d9d9d9';                    // светло-серый
+        ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        // хештег белым или чёрным? используем чёрный полупрозрачный
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.font = `${Math.max(4, CELL_SIZE * 0.5)}px "Courier New", monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(cell.hashtag, x * CELL_SIZE + CELL_SIZE/2, y * CELL_SIZE + CELL_SIZE/2);
+        ctx.textAlign = 'start';
+      }
         }
       }
 
