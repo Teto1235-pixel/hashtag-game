@@ -48,10 +48,10 @@
   </style>
 </head>
 <body>
-  <div id="timer" style="position:absolute; top:10px; left:10px; background:rgba(255,255,255,0.9); padding:4px 8px; border-radius:4px; z-index:10;">⏳ ...</div>
-<div id="saveBtn" style="position:absolute; top:10px; right:10px; z-index:10; display:none;">
-  <button id="saveMapBtn" style="background:#4CAF50; color:white; border:none; border-radius:4px; padding:8px 12px; cursor:pointer;">💾 Сохранить карту</button>
-</div>
+  <div id="timer" style="position:absolute; top:10px; left:50%; transform:translateX(-50%); background:rgba(255,255,255,0.3); color:#fff; padding:4px 16px; border-radius:20px; z-index:10; font-weight:bold;"></div>
+  <div id="saveBtn" style="position:absolute; top:10px; right:10px; z-index:10; display:none;">
+    <button id="saveMapBtn" style="background:#4CAF50; color:white; border:none; border-radius:4px; padding:8px 12px; cursor:pointer;">💾 Сохранить карту</button>
+  </div>
   <div id="info">Загрузка...</div>
   <div id="legend">
     <div id="legendColor"></div>
@@ -59,16 +59,32 @@
   </div>
   <button id="menuBtn" title="Меню">⚙️</button>
   <div id="leaderboard"></div>
+
+  <!-- Чат -->
+  <div id="chatPanel" style="display:none; position:absolute; bottom:80px; left:20px; width:260px; max-height:320px; background:rgba(0,0,0,0.75); color:white; border-radius:8px; padding:8px; z-index:15; font-family:'Courier New',monospace;">
+    <div id="chatMessages" style="height:200px; overflow-y:auto; font-size:12px; margin-bottom:5px;"></div>
+    <input type="text" id="chatInput" placeholder="Сообщение..." style="width:100%; box-sizing:border-box; padding:4px; font-size:12px; background:#333; color:white; border:1px solid #555; border-radius:4px;">
+    <button id="chatSendBtn" style="width:100%; margin-top:4px; background:#4d79ff; color:white; border:none; border-radius:4px; padding:4px; cursor:pointer; font-size:12px;">Отправить</button>
+  </div>
+  <button id="chatToggleBtn" style="position:absolute; bottom:80px; left:20px; z-index:15; background:rgba(255,255,255,0.9); border:1px solid #ccc; padding:4px 10px; border-radius:4px; cursor:pointer; font-family:'Courier New',monospace;">💬</button>
+
   <div id="menuPanel">
     <p id="menuStatus"></p>
-    <p id="menuCanChange"></p>
     <button id="changeHashtagBtn">Сменить хештег</button>
     <button id="releaseBtn">Освободить хештег</button>
     <button id="closeMenuBtn">Закрыть</button>
   </div>
-    <div id="selection">
+
+  <div id="selection">
     <h3>Выберите хештег</h3>
     <div id="hashtagList"></div>
+    <div id="nicknameBlock" style="margin-bottom:10px;">
+      <label style="font-size:14px;">Ваш ник: 
+        <input type="text" id="nicknameInput" placeholder="Введите ник" maxlength="16" style="width:120px;">
+      </label>
+      <button id="setNicknameBtn" style="margin-left:5px;">Сохранить</button>
+      <span id="nicknameDisplay" style="display:none; margin-left:5px; font-weight:bold;"></span>
+    </div>
     <p style="font-size:12px; margin:10px 0; color:#555; line-height:1.4;">
       1. Выбери хештег — заспаунишься.<br>
       2. Ресурс — лайки.<br>
@@ -77,6 +93,7 @@
     <hr>
     <button id="spectateBtn">👀 Наблюдать</button>
   </div>
+
   <div id="attackPanel">
     <div>Цель: <span id="targetCoords"></span></div>
     <div>Сила атаки: <span id="powerValue">1</span></div>
@@ -89,10 +106,12 @@
     <button id="attackBtn">Атаковать</button>
     <button id="cancelAttackBtn">Отмена</button>
   </div>
+
   <div id="gameover">
     <div>💔 Вы потеряли все клетки!</div>
     <button id="gameoverSpectate">Наблюдать</button>
   </div>
+
   <div id="canvasContainer">
     <canvas id="gameCanvas"></canvas>
   </div>
@@ -119,19 +138,20 @@
 
     // ---------- СОСТОЯНИЕ ----------
     const currentPlayer = {
-      id: null, likes: 0, color: '#cccccc', hashtag: null, spawnX: 0, spawnY: 0
+      id: null, likes: 0, color: '#cccccc', hashtag: null, nickname: null, spawnX: 0, spawnY: 0
     };
     let map = Array(MAP_H).fill(null).map(() => Array(MAP_W).fill().map(() => ({ ownerId: null, hashtag: '' })));
     let playersInfo = {};
     let adjacentSet = new Set();
     let leaderboard = [];
     let animating = false, animationQueue = [], animationTimer = null;
-    let hashtagLikes = {};   // глобальные лайки хештегов
+    let hashtagLikes = {};
 
     let viewX = 0, viewY = 0;
     let zoom = 1;
     const MIN_ZOOM = 0.3, MAX_ZOOM = 5;
     let spectating = false;
+    let nicknameSet = false; // ← объявлена переменная
 
     // Таймер
     let gameOver = false;
@@ -149,10 +169,14 @@
     const leaderboardDiv = document.getElementById('leaderboard');
     const selectionDiv = document.getElementById('selection');
     const gameoverDiv = document.getElementById('gameover');
+    const chatPanel = document.getElementById('chatPanel');
+    const chatMessages = document.getElementById('chatMessages');
+    const chatInput = document.getElementById('chatInput');
+    const chatSendBtn = document.getElementById('chatSendBtn');
+    const chatToggleBtn = document.getElementById('chatToggleBtn');
     const menuBtn = document.getElementById('menuBtn');
     const menuPanel = document.getElementById('menuPanel');
     const menuStatus = document.getElementById('menuStatus');
-    const menuCanChange = document.getElementById('menuCanChange');
     const changeHashtagBtn = document.getElementById('changeHashtagBtn');
     const releaseBtn = document.getElementById('releaseBtn');
     const saveBtnDiv = document.getElementById('saveBtn');
@@ -174,7 +198,6 @@
         timerDiv.textContent = '⌛ Игра завершена';
         if (!gameOver) {
           gameOver = true;
-          // Блокируем атаки
           attackPanel.style.display = 'none';
           saveBtnDiv.style.display = 'block';
           if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
@@ -188,7 +211,30 @@
       timerDiv.textContent = `⏳ ${days}д ${hours}ч ${mins}м ${secs}с`;
     }
 
-    // Кнопка сохранения
+    // --- Никнейм ---
+    document.getElementById('setNicknameBtn').addEventListener('click', () => {
+      const nick = document.getElementById('nicknameInput').value.trim();
+      if (!nick) return alert('Введите ник');
+      fetch(`${SERVER_URL}/nickname`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentPlayer.id, nickname: nick })
+      })
+      .then(r => r.json())
+      .then(res => {
+        if (res.error) return alert(res.error);
+        currentPlayer.nickname = nick;
+        nicknameSet = true;
+        document.getElementById('nicknameInput').style.display = 'none';
+        document.getElementById('setNicknameBtn').style.display = 'none';
+        document.getElementById('nicknameDisplay').textContent = 'Ник: ' + nick;
+        document.getElementById('nicknameDisplay').style.display = 'inline';
+        updateInfo(`Привет, ${nick}!`);
+      })
+      .catch(() => alert('Ошибка сети'));
+    });
+
+    // --- Кнопка сохранения карты ---
     document.getElementById('saveMapBtn').addEventListener('click', () => {
       const dataUrl = canvas.toDataURL('image/png');
       const link = document.createElement('a');
@@ -198,6 +244,54 @@
       link.click();
       document.body.removeChild(link);
     });
+
+    // --- Чат ---
+    chatSendBtn.addEventListener('click', async () => {
+      const text = chatInput.value.trim();
+      if (!text) return;
+      try {
+        await fetch(`${SERVER_URL}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentPlayer.id, text })
+        });
+        chatInput.value = '';
+        fetchChatMessages();
+      } catch (e) {
+        console.error('Ошибка отправки:', e);
+      }
+    });
+    chatInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') chatSendBtn.click();
+    });
+    chatToggleBtn.addEventListener('click', () => {
+      if (chatPanel.style.display === 'none' || chatPanel.style.display === '') {
+        chatPanel.style.display = 'block';
+      } else {
+        chatPanel.style.display = 'none';
+      }
+    });
+
+    async function fetchChatMessages() {
+      try {
+        const res = await fetch(`${SERVER_URL}/chat/get`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        }).then(r => r.json());
+        if (res.messages) {
+          chatMessages.innerHTML = '';
+          for (const msg of res.messages) {
+            const div = document.createElement('div');
+            div.textContent = `${msg.nickname}: ${msg.text}`;
+            chatMessages.appendChild(div);
+          }
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+      } catch (e) {
+        console.error('Ошибка чата:', e);
+      }
+    }
 
     // ---------- ГРАНИЦЫ КАМЕРЫ ----------
     function clampCamera() {
@@ -481,32 +575,15 @@
     document.getElementById('cancelAttackBtn').addEventListener('click', hideAttackPanel);
 
     // ---------- МЕНЮ ----------
-    menuBtn.addEventListener('click', async () => {
+    menuBtn.addEventListener('click', () => {
       if (currentPlayer.hashtag) {
         menuStatus.textContent = 'Вы играете за: ' + currentPlayer.hashtag;
         changeHashtagBtn.style.display = 'inline-block';
         changeHashtagBtn.textContent = 'Сменить хештег';
+        changeHashtagBtn.disabled = false;
         releaseBtn.style.display = 'inline-block';
-        try {
-          const res = await fetch(`${SERVER_URL}/canChange`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: currentPlayer.id })
-          }).then(r => r.json());
-          if (res.canChange) {
-            menuCanChange.textContent = 'Вы можете сменить хештег.';
-            changeHashtagBtn.disabled = false;
-          } else {
-            menuCanChange.textContent = `Смена недоступна. Осталось примерно ${res.hoursLeft} ч.`;
-            changeHashtagBtn.disabled = true;
-          }
-        } catch (e) {
-          menuCanChange.textContent = 'Ошибка проверки.';
-          changeHashtagBtn.disabled = true;
-        }
       } else {
         menuStatus.textContent = 'Режим наблюдателя';
-        menuCanChange.textContent = '';
         changeHashtagBtn.style.display = 'inline-block';
         changeHashtagBtn.textContent = 'Выбрать хештег';
         changeHashtagBtn.disabled = false;
@@ -544,29 +621,16 @@
 
     changeHashtagBtn.addEventListener('click', () => {
       menuPanel.style.display = 'none';
-      if (currentPlayer.hashtag) {
-        fetch(`${SERVER_URL}/state`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: currentPlayer.id })
-        }).then(r => r.json()).then(data => {
-          playersInfo = data.playersInfo || {};
-          hashtagLikes = data.hashtagLikes || {};
-          const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
-          showSelection(AVAILABLE_HASHTAGS, taken);
-        });
-      } else {
-        fetch(`${SERVER_URL}/state`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: currentPlayer.id })
-        }).then(r => r.json()).then(data => {
-          playersInfo = data.playersInfo || {};
-          hashtagLikes = data.hashtagLikes || {};
-          const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
-          showSelection(AVAILABLE_HASHTAGS, taken);
-        });
-      }
+      fetch(`${SERVER_URL}/state`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentPlayer.id })
+      }).then(r => r.json()).then(data => {
+        playersInfo = data.playersInfo || {};
+        hashtagLikes = data.hashtagLikes || {};
+        const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
+        showSelection(AVAILABLE_HASHTAGS, taken);
+      });
     });
 
     // ---------- СЕРВЕРНЫЕ ЗАПРОСЫ ----------
@@ -575,6 +639,13 @@
         currentPlayer.likes = data.player.likes;
         if (!currentPlayer.hashtag && data.player.hashtag) currentPlayer.hashtag = data.player.hashtag;
         if (data.player.spawnX !== undefined) { currentPlayer.spawnX = data.player.spawnX; currentPlayer.spawnY = data.player.spawnY; }
+        if (data.player.nickname && !currentPlayer.nickname) {
+          currentPlayer.nickname = data.player.nickname;
+          document.getElementById('nicknameInput').style.display = 'none';
+          document.getElementById('setNicknameBtn').style.display = 'none';
+          document.getElementById('nicknameDisplay').textContent = 'Ник: ' + data.player.nickname;
+          document.getElementById('nicknameDisplay').style.display = 'inline';
+        }
       }
       if (data.playersInfo) playersInfo = data.playersInfo;
       if (data.worldW) MAP_W = data.worldW; if (data.worldH) MAP_H = data.worldH;
@@ -652,57 +723,50 @@
     }
 
     let selectionRefreshInterval = null;
-
-function showSelection(hashtags, takenHashtags) {
-  const listDiv = document.getElementById('hashtagList');
-  const spectateBtn = document.getElementById('spectateBtn');
-
-  function buildList(likesData) {
-    listDiv.innerHTML = '';
-    hashtags.forEach(tag => {
-      const btn = document.createElement('button');
-      const likes = likesData[tag] || 0;
-      btn.textContent = `#${tag} (${likes})`;
-      if (takenHashtags?.includes(tag)) {
-        btn.classList.add('taken');
-        btn.disabled = true;
-        btn.title = 'Хештег занят';
-      } else {
-        btn.onclick = () => claimHashtag(tag);
+    function showSelection(hashtags, takenHashtags) {
+      const listDiv = document.getElementById('hashtagList');
+      const spectateBtn = document.getElementById('spectateBtn');
+      function buildList(likesData) {
+        listDiv.innerHTML = '';
+        hashtags.forEach(tag => {
+          const btn = document.createElement('button');
+          const likes = likesData[tag] || 0;
+          btn.textContent = `#${tag} (${likes})`;
+          if (takenHashtags?.includes(tag)) {
+            btn.classList.add('taken');
+            btn.disabled = true;
+            btn.title = 'Хештег занят';
+          } else {
+            btn.onclick = () => claimHashtag(tag);
+          }
+          listDiv.appendChild(btn);
+        });
       }
-      listDiv.appendChild(btn);
-    });
-  }
-
-  buildList(hashtagLikes);  // первоначальное построение
-
-  // Запускаем интервал обновления лайков
-  if (selectionRefreshInterval) clearInterval(selectionRefreshInterval);
-  selectionRefreshInterval = setInterval(async () => {
-    try {
-      const res = await fetch(`${SERVER_URL}/state`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentPlayer.id })
-      }).then(r => r.json());
-      if (res.hashtagLikes) {
-        hashtagLikes = res.hashtagLikes;   // обновили глобальный объект
-        buildList(hashtagLikes);           // перерисовали кнопки
+      buildList(hashtagLikes);
+      if (selectionRefreshInterval) clearInterval(selectionRefreshInterval);
+      selectionRefreshInterval = setInterval(async () => {
+        try {
+          const res = await fetch(`${SERVER_URL}/state`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: currentPlayer.id })
+          }).then(r => r.json());
+          if (res.hashtagLikes) {
+            hashtagLikes = res.hashtagLikes;
+            buildList(hashtagLikes);
+          }
+        } catch (e) {}
+      }, 5000);
+      spectateBtn.onclick = spectate;
+      selectionDiv.style.display = 'block';
+    }
+    function hideSelection() {
+      if (selectionRefreshInterval) {
+        clearInterval(selectionRefreshInterval);
+        selectionRefreshInterval = null;
       }
-    } catch (e) { /* игнорируем ошибки */ }
-  }, 5000);
-
-  spectateBtn.onclick = spectate;
-  selectionDiv.style.display = 'block';
-}
-
-function hideSelection() {
-  if (selectionRefreshInterval) {
-    clearInterval(selectionRefreshInterval);
-    selectionRefreshInterval = null;
-  }
-  selectionDiv.style.display = 'none';
-}
+      selectionDiv.style.display = 'none';
+    }
 
     // ---------- ОТРИСОВКА ----------
     function drawMap() {
@@ -711,10 +775,8 @@ function hideSelection() {
       ctx.save();
       ctx.scale(zoom, zoom);
       ctx.translate(-viewX, -viewY);
-
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, MAP_W * CELL_SIZE, MAP_H * CELL_SIZE);
-
       for (let y = 0; y < MAP_H; y++) {
         for (let x = 0; x < MAP_W; x++) {
           const cell = map[y][x];
@@ -722,29 +784,26 @@ function hideSelection() {
             const info = playersInfo[cell.ownerId];
             ctx.fillStyle = info ? info.color : '#cccccc';
             ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+          } else if (cell.hashtag) {
+            ctx.fillStyle = '#b0b0b0';
+            ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            ctx.fillStyle = 'white';
+            ctx.shadowColor = 'black';
+            ctx.shadowBlur = 2;
+            ctx.font = `bold ${Math.max(5, CELL_SIZE * 0.6)}px "Courier New", monospace`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(cell.hashtag, x * CELL_SIZE + CELL_SIZE/2, y * CELL_SIZE + CELL_SIZE/2);
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            ctx.textAlign = 'start';
           }
-          else if (cell.hashtag) {
-  ctx.fillStyle = '#b0b0b0';                      // более заметный серый
-  ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-  ctx.fillStyle = 'white';
-  ctx.shadowColor = 'black';
-  ctx.shadowBlur = 2;
-  ctx.font = `bold ${Math.max(5, CELL_SIZE * 0.6)}px "Courier New", monospace`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(cell.hashtag, x * CELL_SIZE + CELL_SIZE/2, y * CELL_SIZE + CELL_SIZE/2);
-  ctx.shadowColor = 'transparent';   // сброс тени
-  ctx.shadowBlur = 0;
-  ctx.textAlign = 'start';
-}
         }
       }
-
       ctx.strokeStyle = '#e0e0e0';
       ctx.lineWidth = 0.3 / zoom;
       for (let i = 0; i <= MAP_H; i++) { ctx.beginPath(); ctx.moveTo(0, i * CELL_SIZE); ctx.lineTo(MAP_W * CELL_SIZE, i * CELL_SIZE); ctx.stroke(); }
       for (let i = 0; i <= MAP_W; i++) { ctx.beginPath(); ctx.moveTo(i * CELL_SIZE, 0); ctx.lineTo(i * CELL_SIZE, MAP_H * CELL_SIZE); ctx.stroke(); }
-
       if (!animating && currentPlayer.id && currentPlayer.hashtag && adjacentSet.size) {
         ctx.strokeStyle = '#FFD700';
         ctx.lineWidth = 1.5 / zoom;
@@ -753,7 +812,6 @@ function hideSelection() {
           ctx.strokeRect(cx * CELL_SIZE, cy * CELL_SIZE, CELL_SIZE, CELL_SIZE);
         });
       }
-
       const drawnOwners = new Set();
       for (let y = 0; y < MAP_H; y++) {
         for (let x = 0; x < MAP_W; x++) {
@@ -779,8 +837,6 @@ function hideSelection() {
       }
       ctx.textAlign = 'start';
       ctx.restore();
-
-      // Указатель направления
       if (currentPlayer.id && currentPlayer.hashtag) {
         const arrowX = canvas.width / 2;
         const arrowY = canvas.height - 60;
@@ -809,13 +865,11 @@ function hideSelection() {
           }
         }
       }
-
       if (currentPlayer.id) {
         menuBtn.style.display = 'block';
       } else {
         menuBtn.style.display = 'none';
       }
-
       if (currentPlayer.id && currentPlayer.hashtag) {
         legend.style.display = 'flex';
         legendColor.style.backgroundColor = currentPlayer.color;
@@ -869,9 +923,18 @@ function hideSelection() {
         return r.json();
       })
       .then(state => {
-        currentPlayer.color = state.player.color;
-        currentPlayer.spawnX = state.player.spawnX;
-        currentPlayer.spawnY = state.player.spawnY;
+        currentPlayer.color = state.player?.color || '#cccccc';
+        if (state.player) {
+          currentPlayer.spawnX = state.player.spawnX;
+          currentPlayer.spawnY = state.player.spawnY;
+          if (state.player.nickname) {
+            currentPlayer.nickname = state.player.nickname;
+            document.getElementById('nicknameInput').style.display = 'none';
+            document.getElementById('setNicknameBtn').style.display = 'none';
+            document.getElementById('nicknameDisplay').textContent = 'Ник: ' + state.player.nickname;
+            document.getElementById('nicknameDisplay').style.display = 'inline';
+          }
+        }
         MAP_W = state.worldW || MAP_W;
         MAP_H = state.worldH || MAP_H;
         leaderboard = state.leaderboard || [];
@@ -892,7 +955,9 @@ function hideSelection() {
           showSelection(AVAILABLE_HASHTAGS, taken);
         }
         resizeCanvas();
-        setInterval(fetchState, 10000);    // <--- теперь автообновление работает
+        setInterval(fetchState, 10000);
+        setInterval(fetchChatMessages, 3000);
+        fetchChatMessages();
       })
       .catch(err => {
         updateInfo('⚠️ Нет связи с сервером: ' + err.message);
