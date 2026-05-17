@@ -572,11 +572,10 @@
     });
     document.getElementById('cancelAttackBtn').addEventListener('click', hideAttackPanel);
 
-    // ---------- МЕНЮ ----------
+       // ---------- МЕНЮ ----------
     menuBtn.addEventListener('click', () => {
       if (currentPlayer.hashtag) {
         menuStatus.textContent = 'Вы играете за: ' + currentPlayer.hashtag;
-        changeHashtagBtn.style.display = 'inline-block';
         releaseBtn.style.display = 'inline-block';
       } else {
         menuStatus.textContent = 'Режим наблюдателя';
