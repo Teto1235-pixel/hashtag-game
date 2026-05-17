@@ -74,6 +74,7 @@
   <div id="menuPanel">
   <p id="menuStatus"></p>
   <button id="releaseBtn">Освободить хештег</button>
+  <button id="chooseHashtagBtn" style="display:none;">Выбрать хештег</button>
   <button id="closeMenuBtn">Закрыть</button>
 </div>
 
@@ -182,6 +183,7 @@
     const menuPanel = document.getElementById('menuPanel');
     const menuStatus = document.getElementById('menuStatus');
     const releaseBtn = document.getElementById('releaseBtn');
+    const chooseHashtagBtn = document.getElementById('chooseHashtagBtn');
     const saveBtnDiv = document.getElementById('saveBtn');
     const timerDiv = document.getElementById('timer');
     let selectedTarget = null;
@@ -593,15 +595,17 @@
 
        // ---------- МЕНЮ ----------
     menuBtn.addEventListener('click', () => {
-      if (currentPlayer.hashtag) {
-        menuStatus.textContent = 'Вы играете за: ' + currentPlayer.hashtag;
-        releaseBtn.style.display = 'inline-block';
-      } else {
-        menuStatus.textContent = 'Режим наблюдателя';
-        releaseBtn.style.display = 'none';
-      }
-      menuPanel.style.display = 'block';
-    });
+  if (currentPlayer.hashtag) {
+    menuStatus.textContent = 'Вы играете за: ' + currentPlayer.hashtag;
+    releaseBtn.style.display = 'inline-block';
+    chooseHashtagBtn.style.display = 'none';
+  } else {
+    menuStatus.textContent = 'Режим наблюдателя';
+    releaseBtn.style.display = 'none';
+    chooseHashtagBtn.style.display = 'inline-block';
+  }
+  menuPanel.style.display = 'block';
+});
 
     document.getElementById('closeMenuBtn').addEventListener('click', () => {
       menuPanel.style.display = 'none';
@@ -629,6 +633,20 @@
         alert('Ошибка сети');
       }
     });
+
+    chooseHashtagBtn.addEventListener('click', () => {
+  menuPanel.style.display = 'none';
+  fetch(`${SERVER_URL}/state`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId: currentPlayer.id })
+  }).then(r => r.json()).then(data => {
+    playersInfo = data.playersInfo || {};
+    hashtagLikes = data.hashtagLikes || {};
+    const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
+    showSelection(AVAILABLE_HASHTAGS, taken);
+  });
+});
 
     // ---------- СЕРВЕРНЫЕ ЗАПРОСЫ ----------
     function applyServerResponse(data, capturedCells) {
