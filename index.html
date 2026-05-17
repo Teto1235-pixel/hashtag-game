@@ -66,7 +66,10 @@
     <input type="text" id="chatInput" placeholder="Сообщение..." style="width:100%; box-sizing:border-box; padding:4px; font-size:12px; background:#333; color:white; border:1px solid #555; border-radius:4px;">
     <button id="chatSendBtn" style="width:100%; margin-top:4px; background:#4d79ff; color:white; border:none; border-radius:4px; padding:4px; cursor:pointer; font-size:12px;">Отправить</button>
   </div>
-  <button id="chatToggleBtn" style="position:absolute; bottom:80px; left:20px; z-index:15; background:rgba(255,255,255,0.9); border:1px solid #ccc; padding:4px 10px; border-radius:4px; cursor:pointer; font-family:'Courier New',monospace;">💬</button>
+  <button id="chatToggleBtn" style="position:absolute; bottom:80px; left:20px; z-index:15; background:rgba(255,255,255,0.9); border:1px solid #ccc; padding:4px 10px; border-radius:4px; cursor:pointer; font-family:'Courier New',monospace;">
+  💬
+  <span id="chatUnreadDot" style="display:none; position:absolute; top:-4px; right:-4px; width:12px; height:12px; background:red; border-radius:50%; border:1px solid white;"></span>
+</button>
 
   <div id="menuPanel">
   <p id="menuStatus"></p>
@@ -156,6 +159,8 @@
     let gameOver = false;
     let gameEndTime = null;
     let timerInterval = null;
+    let lastReadTimestamp = 0; // время последнего прочитанного сообщения
+    let newestMessageTimestamp = 0;
 
     // UI
     const attackPanel = document.getElementById('attackPanel');
@@ -262,34 +267,48 @@
     chatInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') chatSendBtn.click();
     });
-    chatToggleBtn.addEventListener('click', () => {
-      if (chatPanel.style.display === 'none' || chatPanel.style.display === '') {
-        chatPanel.style.display = 'block';
-      } else {
-        chatPanel.style.display = 'none';
-      }
-    });
+   chatToggleBtn.addEventListener('click', () => {
+  if (chatPanel.style.display === 'none' || chatPanel.style.display === '') {
+    chatPanel.style.display = 'block';
+    document.getElementById('chatUnreadDot').style.display = 'none';
+    lastReadTimestamp = newestMessageTimestamp; // всё прочитано
+  } else {
+    chatPanel.style.display = 'none';
+  }
+});
 
     async function fetchChatMessages() {
-      try {
-        const res = await fetch(`${SERVER_URL}/chat/get`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({})
-        }).then(r => r.json());
-        if (res.messages) {
-          chatMessages.innerHTML = '';
-          for (const msg of res.messages) {
-            const div = document.createElement('div');
-            div.textContent = `${msg.nickname}: ${msg.text}`;
-            chatMessages.appendChild(div);
-          }
-          chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-      } catch (e) {
-        console.error('Ошибка чата:', e);
+  try {
+    const res = await fetch(`${SERVER_URL}/chat/get`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    }).then(r => r.json());
+    if (res.messages && res.messages.length > 0) {
+      chatMessages.innerHTML = '';
+      for (const msg of res.messages) {
+        const div = document.createElement('div');
+        div.textContent = `${msg.nickname}: ${msg.text}`;
+        chatMessages.appendChild(div);
+      }
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+
+      const newestTimestamp = res.messages[res.messages.length - 1].timestamp;
+      newestMessageTimestamp = newestTimestamp;
+
+      // Если чат открыт — сразу считаем все сообщения прочитанными
+      if (chatPanel.style.display === 'block') {
+        lastReadTimestamp = newestMessageTimestamp;
+        document.getElementById('chatUnreadDot').style.display = 'none';
+      } else if (newestTimestamp > lastReadTimestamp) {
+        // Чат закрыт и есть непрочитанные — показываем точку
+        document.getElementById('chatUnreadDot').style.display = 'block';
       }
     }
+  } catch (e) {
+    console.error('Ошибка чата:', e);
+  }
+}
 
     // ---------- ГРАНИЦЫ КАМЕРЫ ----------
     function clampCamera() {
