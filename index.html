@@ -48,6 +48,10 @@
   </style>
 </head>
 <body>
+  <div id="timer" style="position:absolute; top:10px; left:10px; background:rgba(255,255,255,0.9); padding:4px 8px; border-radius:4px; z-index:10;">⏳ ...</div>
+<div id="saveBtn" style="position:absolute; top:10px; right:10px; z-index:10; display:none;">
+  <button id="saveMapBtn" style="background:#4CAF50; color:white; border:none; border-radius:4px; padding:8px 12px; cursor:pointer;">💾 Сохранить карту</button>
+</div>
   <div id="info">Загрузка...</div>
   <div id="legend">
     <div id="legendColor"></div>
@@ -99,7 +103,7 @@
     const CELL_SIZE = 8;
     let MAP_W = 320;
     let MAP_H = 180;
-    const SERVER_URL = 'https://possible-wise-administration-engineer.trycloudflare.com'; // ваш актуальный адрес
+    const SERVER_URL = 'https://rehab-dublin-graphics-damages.trycloudflare.com'; // ваш актуальный адрес
 
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
@@ -129,6 +133,11 @@
     const MIN_ZOOM = 0.3, MAX_ZOOM = 5;
     let spectating = false;
 
+    // Таймер
+    let gameOver = false;
+    let gameEndTime = null;
+    let timerInterval = null;
+
     // UI
     const attackPanel = document.getElementById('attackPanel');
     const powerSlider = document.getElementById('powerSlider');
@@ -146,6 +155,8 @@
     const menuCanChange = document.getElementById('menuCanChange');
     const changeHashtagBtn = document.getElementById('changeHashtagBtn');
     const releaseBtn = document.getElementById('releaseBtn');
+    const saveBtnDiv = document.getElementById('saveBtn');
+    const timerDiv = document.getElementById('timer');
     let selectedTarget = null;
     let clickTarget = null;
 
@@ -153,6 +164,40 @@
     canvas.addEventListener('gesturechange', e => e.preventDefault());
     canvas.addEventListener('gestureend', e => e.preventDefault());
     canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    // --- Функция обновления таймера ---
+    function updateTimer() {
+      if (!gameEndTime) return;
+      const now = Date.now();
+      const diff = gameEndTime - now;
+      if (diff <= 0) {
+        timerDiv.textContent = '⌛ Игра завершена';
+        if (!gameOver) {
+          gameOver = true;
+          // Блокируем атаки
+          attackPanel.style.display = 'none';
+          saveBtnDiv.style.display = 'block';
+          if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+        }
+        return;
+      }
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (86400000)) / (3600000));
+      const mins = Math.floor((diff % 3600000) / 60000);
+      const secs = Math.floor((diff % 60000) / 1000);
+      timerDiv.textContent = `⏳ ${days}д ${hours}ч ${mins}м ${secs}с`;
+    }
+
+    // Кнопка сохранения
+    document.getElementById('saveMapBtn').addEventListener('click', () => {
+      const dataUrl = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.download = 'hashtag_territory.png';
+      link.href = dataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    });
 
     // ---------- ГРАНИЦЫ КАМЕРЫ ----------
     function clampCamera() {
@@ -536,6 +581,17 @@
       if (data.leaderboard) leaderboard = data.leaderboard;
       if (data.hashtagLikes) hashtagLikes = data.hashtagLikes;
 
+      if (data.gameEndTime) {
+        gameEndTime = data.gameEndTime;
+        gameOver = data.gameOver || false;
+        updateTimer();
+        if (!timerInterval) timerInterval = setInterval(updateTimer, 1000);
+        if (gameOver) {
+          attackPanel.style.display = 'none';
+          saveBtnDiv.style.display = 'block';
+        }
+      }
+
       if (currentPlayer.hashtag && data.defeatedPlayerId === currentPlayer.id) {
         currentPlayer.hashtag = null;
         spectating = true;
@@ -820,6 +876,16 @@ function hideSelection() {
         MAP_H = state.worldH || MAP_H;
         leaderboard = state.leaderboard || [];
         hashtagLikes = state.hashtagLikes || {};
+        gameEndTime = state.gameEndTime;
+        gameOver = state.gameOver || false;
+        if (gameEndTime) {
+          updateTimer();
+          timerInterval = setInterval(updateTimer, 1000);
+        }
+        if (gameOver) {
+          saveBtnDiv.style.display = 'block';
+          updateInfo('Игра завершена');
+        }
         applyServerResponse(state, null);
         if (!currentPlayer.hashtag && !spectating) {
           const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
