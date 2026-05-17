@@ -48,7 +48,7 @@
   </style>
 </head>
 <body>
-  <div id="timer" style="position:absolute; top:10px; left:50%; transform:translateX(-50%); background:rgba(255,255,255,0.3); color:#fff; padding:4px 16px; border-radius:20px; z-index:10; font-weight:bold;"></div>
+  <div id="timer" style="position:absolute; top:10px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0); color:#000; padding:4px 16px; border-radius:20px; z-index:10; font-weight:bold;"></div>
   <div id="saveBtn" style="position:absolute; top:10px; right:10px; z-index:10; display:none;">
     <button id="saveMapBtn" style="background:#4CAF50; color:white; border:none; border-radius:4px; padding:8px 12px; cursor:pointer;">💾 Сохранить карту</button>
   </div>
@@ -69,11 +69,10 @@
   <button id="chatToggleBtn" style="position:absolute; bottom:80px; left:20px; z-index:15; background:rgba(255,255,255,0.9); border:1px solid #ccc; padding:4px 10px; border-radius:4px; cursor:pointer; font-family:'Courier New',monospace;">💬</button>
 
   <div id="menuPanel">
-    <p id="menuStatus"></p>
-    <button id="changeHashtagBtn">Сменить хештег</button>
-    <button id="releaseBtn">Освободить хештег</button>
-    <button id="closeMenuBtn">Закрыть</button>
-  </div>
+  <p id="menuStatus"></p>
+  <button id="releaseBtn">Освободить хештег</button>
+  <button id="closeMenuBtn">Закрыть</button>
+</div>
 
   <div id="selection">
     <h3>Выберите хештег</h3>
@@ -177,7 +176,6 @@
     const menuBtn = document.getElementById('menuBtn');
     const menuPanel = document.getElementById('menuPanel');
     const menuStatus = document.getElementById('menuStatus');
-    const changeHashtagBtn = document.getElementById('changeHashtagBtn');
     const releaseBtn = document.getElementById('releaseBtn');
     const saveBtnDiv = document.getElementById('saveBtn');
     const timerDiv = document.getElementById('timer');
@@ -579,14 +577,9 @@
       if (currentPlayer.hashtag) {
         menuStatus.textContent = 'Вы играете за: ' + currentPlayer.hashtag;
         changeHashtagBtn.style.display = 'inline-block';
-        changeHashtagBtn.textContent = 'Сменить хештег';
-        changeHashtagBtn.disabled = false;
         releaseBtn.style.display = 'inline-block';
       } else {
         menuStatus.textContent = 'Режим наблюдателя';
-        changeHashtagBtn.style.display = 'inline-block';
-        changeHashtagBtn.textContent = 'Выбрать хештег';
-        changeHashtagBtn.disabled = false;
         releaseBtn.style.display = 'none';
       }
       menuPanel.style.display = 'block';
@@ -617,20 +610,6 @@
       } catch (e) {
         alert('Ошибка сети');
       }
-    });
-
-    changeHashtagBtn.addEventListener('click', () => {
-      menuPanel.style.display = 'none';
-      fetch(`${SERVER_URL}/state`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentPlayer.id })
-      }).then(r => r.json()).then(data => {
-        playersInfo = data.playersInfo || {};
-        hashtagLikes = data.hashtagLikes || {};
-        const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
-        showSelection(AVAILABLE_HASHTAGS, taken);
-      });
     });
 
     // ---------- СЕРВЕРНЫЕ ЗАПРОСЫ ----------
