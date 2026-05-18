@@ -155,7 +155,10 @@
     let playersInfo = {};
     let adjacentSet = new Set();
     let leaderboard = [];
-    let animating = false, animationQueue = [], animationTimer = null;
+    let animating = false;
+    let animationQueue = [];
+    let animationTimer = null;
+    let pendingMap = null; 
     let hashtagLikes = {};
 
     let viewX = 0, viewY = 0;
@@ -199,6 +202,7 @@ const factionPanel = document.getElementById('factionPanel');
 const factionTitle = document.getElementById('factionTitle');
 const factionContent = document.getElementById('factionContent');
     let selectedTarget = null;
+    let attackInProgress = false;
     let clickTarget = null;
 
     canvas.addEventListener('gesturestart', e => e.preventDefault());
@@ -794,20 +798,32 @@ document.getElementById('closeFactionBtn').addEventListener('click', () => {
     }
 
     function attackCell(x, y, amount) {
-      fetch(`${SERVER_URL}/attack`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:currentPlayer.id, x, y, amount}) })
-      .then(r=>r.json()).then(res => {
-        if (res.success) {
-          updateInfo(`Захвачено ${res.capturedCells.length} клеток, потрачено ${res.spent} лайков`);
-          applyServerResponse(res, res.capturedCells);
-        } else {
-          updateInfo(`Ошибка: ${res.error}`);
-          applyServerResponse(res, null);
-        }
-      });
+  if (attackInProgress) return;
+  attackInProgress = true;
+  fetch(`${SERVER_URL}/attack`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId: currentPlayer.id, x, y, amount })
+  })
+  .then(r => r.json())
+  .then(res => {
+    attackInProgress = false;
+    if (res.success) {
+      updateInfo(`Захвачено ${res.capturedCells.length} клеток, потрачено ${res.spent} лайков`);
+      applyServerResponse(res, res.capturedCells);
+    } else {
+      updateInfo(`Ошибка: ${res.error}`);
+      applyServerResponse(res, null);
     }
+  })
+  .catch(() => {
+    attackInProgress = false;
+    updateInfo('⚠️ Ошибка сети при атаке');
+  });
+}
 
     function fetchState() {
-  if (!currentPlayer.id || animating) return Promise.resolve();
+  if (!currentPlayer.id) return Promise.resolve();
   return fetch(`${SERVER_URL}/state`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -912,8 +928,19 @@ document.getElementById('closeFactionBtn').addEventListener('click', () => {
       ctx.translate(-viewX, -viewY);
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, MAP_W * CELL_SIZE, MAP_H * CELL_SIZE);
-      for (let y = 0; y < MAP_H; y++) {
-        for (let x = 0; x < MAP_W; x++) {
+      const startX = Math.max(0, Math.floor(viewX / CELL_SIZE));
+const startY = Math.max(0, Math.floor(viewY / CELL_SIZE));
+const endX = Math.min(
+  MAP_W,
+  startX + Math.ceil(canvas.width / (CELL_SIZE * zoom)) + 2
+);
+const endY = Math.min(
+  MAP_H,
+  startY + Math.ceil(canvas.height / (CELL_SIZE * zoom)) + 2
+);
+
+for (let y = startY; y < endY; y++) {
+  for (let x = startX; x < endX; x++) {
           const cell = map[y][x];
           if (cell.ownerId) {
             const info = playersInfo[cell.ownerId];
@@ -937,8 +964,18 @@ document.getElementById('closeFactionBtn').addEventListener('click', () => {
       }
       ctx.strokeStyle = '#e0e0e0';
       ctx.lineWidth = 0.3 / zoom;
-      for (let i = 0; i <= MAP_H; i++) { ctx.beginPath(); ctx.moveTo(0, i * CELL_SIZE); ctx.lineTo(MAP_W * CELL_SIZE, i * CELL_SIZE); ctx.stroke(); }
-      for (let i = 0; i <= MAP_W; i++) { ctx.beginPath(); ctx.moveTo(i * CELL_SIZE, 0); ctx.lineTo(i * CELL_SIZE, MAP_H * CELL_SIZE); ctx.stroke(); }
+      for (let i = startY; i <= endY; i++) {
+  ctx.beginPath();
+  ctx.moveTo(startX * CELL_SIZE, i * CELL_SIZE);
+  ctx.lineTo(endX * CELL_SIZE, i * CELL_SIZE);
+  ctx.stroke();
+}
+      for (let i = startX; i <= endX; i++) {
+  ctx.beginPath();
+  ctx.moveTo(i * CELL_SIZE, startY * CELL_SIZE);
+  ctx.lineTo(i * CELL_SIZE, endY * CELL_SIZE);
+  ctx.stroke();
+}
       if (!animating && currentPlayer.id && currentPlayer.hashtag && adjacentSet.size) {
         ctx.strokeStyle = '#FFD700';
         ctx.lineWidth = 1.5 / zoom;
@@ -1025,7 +1062,7 @@ document.getElementById('closeFactionBtn').addEventListener('click', () => {
         for (let x = 0; x < MAP_W; x++) {
           const cell = map[y][x];
           if (cell.ownerId) {
-            const owner = players[cell.ownerId];
+            const owner = playersInfo[cell.ownerId];
             if (owner && owner.hashtag && !AVAILABLE_HASHTAGS.includes(owner.hashtag)) {
               // Подчинённый
               ctx.save();
@@ -1065,18 +1102,56 @@ document.getElementById('closeFactionBtn').addEventListener('click', () => {
     function updateInfo(text) { document.getElementById('info').textContent = text; }
 
     function animateCapture(cells, serverMap) {
-      if (!cells.length) {
-        map = serverMap; updateAdjacentSet(); drawMap(); updateInfo(`Лайков: ${currentPlayer.likes}`);
-        animating = false; return;
+     if (animationTimer) clearTimeout(animationTimer);
+     if (!cells.length) {
+       map = serverMap;
+       updateAdjacentSet();
+       drawMap();
+       updateInfo(`Лайков: ${currentPlayer.likes}`);
+       animating = false;
+      return;
+     }
+
+     animating = true;
+
+     pendingMap = serverMap;
+
+     animationQueue = [...cells];
+
+     function step() {
+
+       if (!animationQueue.length) {
+
+        map = pendingMap;
+        pendingMap = null;
+
+        animating = false;
+
+        updateAdjacentSet();
+
+        drawMap();
+
+        updateInfo(`Лайков: ${currentPlayer.likes}`);
+
+        return;
       }
-      animating = true; animationQueue = [...cells]; map = serverMap;
-      function step() {
-        if (!animationQueue.length) { animating = false; updateAdjacentSet(); drawMap(); updateInfo(`Лайков: ${currentPlayer.likes}`); return; }
-        drawMap(); animationQueue.shift();
-        animationTimer = setTimeout(step, 200);
-      }
-      step();
-    }
+
+      const cell = animationQueue.shift();
+
+      if (map[cell.y] && map[cell.y][cell.x]) {
+       map[cell.y][cell.x] = {
+        ownerId: currentPlayer.id,
+        hashtag: currentPlayer.hashtag
+       };
+     }
+
+     drawMap();
+
+     animationTimer = setTimeout(step, 60);
+   }
+
+  step();
+}
 
     // ---------- ИНИЦИАЛИЗАЦИЯ ----------
     vkBridge.send('VKWebAppInit')
@@ -1127,8 +1202,12 @@ document.getElementById('closeFactionBtn').addEventListener('click', () => {
           showSelection(AVAILABLE_HASHTAGS, taken);
         }
         resizeCanvas();
-        setInterval(fetchState, 10000);
-        setInterval(fetchChatMessages, 3000);
+        window.stateInterval = setInterval(fetchState, 10000);
+        window.chatInterval = setInterval(fetchChatMessages, 3000); 
+        window.addEventListener('beforeunload', () => {
+          clearInterval(window.stateInterval);
+          clearInterval(window.chatInterval);
+        });
         fetchChatMessages();
       })
       .catch(err => {
