@@ -12,9 +12,18 @@
       touch-action: manipulation;
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     }
-    #canvasContainer { width: 100%; height: 100vh; display: flex; justify-content: center; align-items: center; }
-    canvas { display: block; width: 100%; height: 100%; touch-action: none; }
-    #info, #legend, #menuBtn, #leaderboard, #menuPanel, #selection, #attackPanel, #gameover { position: absolute; z-index: 10; }
+    #canvasContainer {
+      width: 100%; height: 100vh;
+      display: flex; justify-content: center; align-items: center;
+    }
+    canvas {
+      display: block;
+      width: 100%; height: 100%;
+      touch-action: none;
+    }
+    #info, #legend, #menuBtn, #leaderboard, #menuPanel, #selection, #attackPanel, #gameover {
+      position: absolute; z-index: 10;
+    }
     #info { top:10px; left:10px; background:rgba(255,255,255,0.9); padding:4px 8px; border-radius:4px; }
     #legend { bottom:20px; left:20px; background:rgba(255,255,255,0.9); padding:8px 12px; border-radius:8px; display:none; align-items:center; gap:8px; }
     #legendColor { width:20px; height:20px; border:1px solid #333; }
@@ -32,7 +41,9 @@
     #gameover { display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:100; justify-content:center; align-items:center; flex-direction:column; color:white; font-size:24px; }
     button { margin:5px; padding:8px 12px; cursor:pointer; font-family:'Courier New',monospace; }
     input[type=range] { width:200px; }
-    @media (hover: none) and (pointer: coarse) { input[type=range] { width: 160px; height: 30px; } }
+    @media (hover: none) and (pointer: coarse) {
+      input[type=range] { width: 160px; height: 30px; }
+    }
     #attackControls { display: flex; align-items: center; justify-content: center; gap: 8px; }
   </style>
 </head>
@@ -42,7 +53,10 @@
     <button id="saveMapBtn" style="background:#4CAF50; color:white; border:none; border-radius:4px; padding:8px 12px; cursor:pointer;">💾 Сохранить карту</button>
   </div>
   <div id="info">Загрузка...</div>
-  <div id="legend"><div id="legendColor"></div><span id="legendHashtag"></span></div>
+  <div id="legend">
+    <div id="legendColor"></div>
+    <span id="legendHashtag"></span>
+  </div>
   <button id="menuBtn" title="Меню">⚙️</button>
   <div id="leaderboard"></div>
 
@@ -53,9 +67,9 @@
     <button id="chatSendBtn" style="width:100%; margin-top:4px; background:#4d79ff; color:white; border:none; border-radius:4px; padding:4px; cursor:pointer; font-size:12px;">Отправить</button>
   </div>
   <button id="chatToggleBtn" style="position:absolute; bottom:80px; left:20px; z-index:15; background:rgba(255,255,255,0.9); border:1px solid #ccc; padding:4px 10px; border-radius:4px; cursor:pointer; font-family:'Courier New',monospace;">
-    💬
-    <span id="chatUnreadDot" style="display:none; position:absolute; top:-4px; right:-4px; width:12px; height:12px; background:red; border-radius:50%; border:1px solid white;"></span>
-  </button>
+  💬
+  <span id="chatUnreadDot" style="display:none; position:absolute; top:-4px; right:-4px; width:12px; height:12px; background:red; border-radius:50%; border:1px solid white;"></span>
+</button>
 
   <!-- Фракция -->
   <div id="factionPanel" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:white; border:1px solid #ccc; padding:20px; z-index:25; text-align:center; max-height:80vh; overflow-y:auto;">
@@ -66,11 +80,11 @@
   <button id="factionBtn" style="position:absolute; bottom:80px; right:20px; z-index:15; background:rgba(255,255,255,0.9); border:1px solid #ccc; padding:4px 10px; border-radius:4px; cursor:pointer; font-family:'Courier New',monospace;">👥</button>
 
   <div id="menuPanel">
-    <p id="menuStatus"></p>
-    <button id="releaseBtn">Освободить хештег</button>
-    <button id="chooseHashtagBtn" style="display:none;">Выбрать хештег</button>
-    <button id="closeMenuBtn">Закрыть</button>
-  </div>
+  <p id="menuStatus"></p>
+  <button id="releaseBtn">Освободить хештег</button>
+  <button id="chooseHashtagBtn" style="display:none;">Выбрать хештег</button>
+  <button id="closeMenuBtn">Закрыть</button>
+</div>
 
   <div id="selection">
     <h3>Выберите хештег</h3>
@@ -104,8 +118,14 @@
     <button id="cancelAttackBtn">Отмена</button>
   </div>
 
-  <div id="gameover"><div>💔 Вы потеряли все клетки!</div><button id="gameoverSpectate">Наблюдать</button></div>
-  <div id="canvasContainer"><canvas id="gameCanvas"></canvas></div>
+  <div id="gameover">
+    <div>💔 Вы потеряли все клетки!</div>
+    <button id="gameoverSpectate">Наблюдать</button>
+  </div>
+
+  <div id="canvasContainer">
+    <canvas id="gameCanvas"></canvas>
+  </div>
 
   <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
   <script>
@@ -113,7 +133,7 @@
     const CELL_SIZE = 8;
     let MAP_W = 320;
     let MAP_H = 180;
-    const SERVER_URL = 'https://chicago-calvin-applications-nested.trycloudflare.com';
+    const SERVER_URL = 'https://chicago-calvin-applications-nested.trycloudflare.com '; // ваш актуальный адрес
 
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
@@ -142,12 +162,13 @@
     let zoom = 1;
     const MIN_ZOOM = 0.3, MAX_ZOOM = 5;
     let spectating = false;
-    let nicknameSet = false;
+    let nicknameSet = false; // ← объявлена переменная
 
+    // Таймер
     let gameOver = false;
     let gameEndTime = null;
     let timerInterval = null;
-    let lastReadTimestamp = 0;
+    let lastReadTimestamp = 0; // время последнего прочитанного сообщения
     let newestMessageTimestamp = 0;
 
     // UI
@@ -174,9 +195,9 @@
     const saveBtnDiv = document.getElementById('saveBtn');
     const timerDiv = document.getElementById('timer');
     const factionBtn = document.getElementById('factionBtn');
-    const factionPanel = document.getElementById('factionPanel');
-    const factionTitle = document.getElementById('factionTitle');
-    const factionContent = document.getElementById('factionContent');
+const factionPanel = document.getElementById('factionPanel');
+const factionTitle = document.getElementById('factionTitle');
+const factionContent = document.getElementById('factionContent');
     let selectedTarget = null;
     let clickTarget = null;
 
@@ -185,7 +206,7 @@
     canvas.addEventListener('gestureend', e => e.preventDefault());
     canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-    // ---------- ФУНКЦИИ (ТАЙМЕР, НИК, ЧАТ, ФРАКЦИЯ, ОТРИСОВКА и т.д.) ----------
+    // --- Функция обновления таймера ---
     function updateTimer() {
       if (!gameEndTime) return;
       const now = Date.now();
@@ -207,24 +228,30 @@
       timerDiv.textContent = `⏳ ${days}д ${hours}ч ${mins}м ${secs}с`;
     }
 
+    // --- Никнейм ---
     document.getElementById('setNicknameBtn').addEventListener('click', () => {
       const nick = document.getElementById('nicknameInput').value.trim();
       if (!nick) return alert('Введите ник');
-      fetch(`${SERVER_URL}/nickname`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:currentPlayer.id, nickname:nick}) })
-        .then(r => r.json())
-        .then(res => {
-          if (res.error) return alert(res.error);
-          currentPlayer.nickname = nick;
-          nicknameSet = true;
-          document.getElementById('nicknameInput').style.display = 'none';
-          document.getElementById('setNicknameBtn').style.display = 'none';
-          document.getElementById('nicknameDisplay').textContent = 'Ник: ' + nick;
-          document.getElementById('nicknameDisplay').style.display = 'inline';
-          updateInfo(`Привет, ${nick}!`);
-        })
-        .catch(() => alert('Ошибка сети'));
+      fetch(`${SERVER_URL}/nickname`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentPlayer.id, nickname: nick })
+      })
+      .then(r => r.json())
+      .then(res => {
+        if (res.error) return alert(res.error);
+        currentPlayer.nickname = nick;
+        nicknameSet = true;
+        document.getElementById('nicknameInput').style.display = 'none';
+        document.getElementById('setNicknameBtn').style.display = 'none';
+        document.getElementById('nicknameDisplay').textContent = 'Ник: ' + nick;
+        document.getElementById('nicknameDisplay').style.display = 'inline';
+        updateInfo(`Привет, ${nick}!`);
+      })
+      .catch(() => alert('Ошибка сети'));
     });
 
+    // --- Кнопка сохранения карты ---
     document.getElementById('saveMapBtn').addEventListener('click', () => {
       const dataUrl = canvas.toDataURL('image/png');
       const link = document.createElement('a');
@@ -235,115 +262,159 @@
       document.body.removeChild(link);
     });
 
+    // --- Чат ---
     chatSendBtn.addEventListener('click', async () => {
       const text = chatInput.value.trim();
       if (!text) return;
       try {
-        await fetch(`${SERVER_URL}/chat`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:currentPlayer.id, text}) });
+        await fetch(`${SERVER_URL}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentPlayer.id, text })
+        });
         chatInput.value = '';
         fetchChatMessages();
-      } catch (e) { console.error('Ошибка отправки:', e); }
-    });
-    chatInput.addEventListener('keypress', e => { if (e.key === 'Enter') chatSendBtn.click(); });
-    chatToggleBtn.addEventListener('click', () => {
-      if (chatPanel.style.display === 'none' || chatPanel.style.display === '') {
-        chatPanel.style.display = 'block';
-        document.getElementById('chatUnreadDot').style.display = 'none';
-        lastReadTimestamp = newestMessageTimestamp;
-      } else {
-        chatPanel.style.display = 'none';
+      } catch (e) {
+        console.error('Ошибка отправки:', e);
       }
     });
+    chatInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') chatSendBtn.click();
+    });
+   chatToggleBtn.addEventListener('click', () => {
+  if (chatPanel.style.display === 'none' || chatPanel.style.display === '') {
+    chatPanel.style.display = 'block';
+    document.getElementById('chatUnreadDot').style.display = 'none';
+    lastReadTimestamp = newestMessageTimestamp; // всё прочитано
+  } else {
+    chatPanel.style.display = 'none';
+  }
+});
 
     async function fetchChatMessages() {
-      try {
-        const res = await fetch(`${SERVER_URL}/chat/get`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({}) }).then(r => r.json());
-        if (res.messages && res.messages.length > 0) {
-          chatMessages.innerHTML = '';
-          for (const msg of res.messages) {
-            const div = document.createElement('div');
-            div.textContent = `${msg.nickname}: ${msg.text}`;
-            chatMessages.appendChild(div);
-          }
-          chatMessages.scrollTop = chatMessages.scrollHeight;
-          const newestTimestamp = res.messages[res.messages.length - 1].timestamp;
-          newestMessageTimestamp = newestTimestamp;
-          if (chatPanel.style.display === 'block') {
-            lastReadTimestamp = newestMessageTimestamp;
-            document.getElementById('chatUnreadDot').style.display = 'none';
-          } else if (newestTimestamp > lastReadTimestamp) {
-            document.getElementById('chatUnreadDot').style.display = 'block';
-          }
-        }
-      } catch (e) { console.error('Ошибка чата:', e); }
+  try {
+    const res = await fetch(`${SERVER_URL}/chat/get`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    }).then(r => r.json());
+    if (res.messages && res.messages.length > 0) {
+      chatMessages.innerHTML = '';
+      for (const msg of res.messages) {
+        const div = document.createElement('div');
+        div.textContent = `${msg.nickname}: ${msg.text}`;
+        chatMessages.appendChild(div);
+      }
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+
+      const newestTimestamp = res.messages[res.messages.length - 1].timestamp;
+      newestMessageTimestamp = newestTimestamp;
+
+      // Если чат открыт — сразу считаем все сообщения прочитанными
+      if (chatPanel.style.display === 'block') {
+        lastReadTimestamp = newestMessageTimestamp;
+        document.getElementById('chatUnreadDot').style.display = 'none';
+      } else if (newestTimestamp > lastReadTimestamp) {
+        // Чат закрыт и есть непрочитанные — показываем точку
+        document.getElementById('chatUnreadDot').style.display = 'block';
+      }
     }
+  } catch (e) {
+    console.error('Ошибка чата:', e);
+  }
+}
 
-    factionBtn.addEventListener('click', async () => {
-      const res = await fetch(`${SERVER_URL}/faction/info`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:currentPlayer.id}) }).then(r => r.json());
-      if (!res.faction) {
-        factionTitle.textContent = 'Вы не состоите во фракции';
-        factionContent.innerHTML = '';
-        factionPanel.style.display = 'block';
-        return;
-      }
-      const f = res.faction;
-      factionTitle.textContent = `Фракция #${res.baseHashtag}`;
-      let html = '';
-      if (f.commander) html += `<p>Командир: ${f.commander.nickname}</p>`;
-      html += '<h4>Подчинённые:</h4>';
-      f.minors.filter(m => m.occupiedBy).forEach(m => {
-        html += `<p>${m.nickname} (${m.tag}) – ${m.likes} лайков <button data-action="view">Обзор</button></p>`;
-      });
-      html += '<h4>Свободные малые хештеги:</h4>';
-      f.minors.filter(m => !m.occupiedBy).forEach(m => {
-        html += `<p>#${m.tag} – ${m.likes} лайков <button data-action="claim" data-tag="${m.tag}">Занять</button></p>`;
-      });
-      html += '<h4>Наблюдатели:</h4>';
-      f.observers.forEach(o => { html += `<p>${o.nickname}</p>`; });
-      if (!currentPlayer.hashtag && currentPlayer.nickname) {
-        const myMinor = f.minors.find(m => m.occupiedBy === currentPlayer.id);
-        if (myMinor) html += `<button id="releaseMinorBtn">Освободить хештег</button>`;
-      }
-      factionContent.innerHTML = html;
-      factionPanel.style.display = 'block';
-
-      document.querySelectorAll('[data-action="claim"]').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-          const tag = e.target.dataset.tag;
-          const resp = await fetch(`${SERVER_URL}/faction/claim`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:currentPlayer.id, baseHashtag:res.baseHashtag, minorTag:tag}) }).then(r => r.json());
-          if (resp.success) {
-            currentPlayer.hashtag = resp.minorTag;
-            currentPlayer.likes = resp.player.likes;
-            applyServerResponse(resp, null);
-            factionPanel.style.display = 'none';
-          } else alert(resp.error);
-        });
-      });
-
-      const releaseMinorBtnLocal = document.getElementById('releaseMinorBtn');
-      if (releaseMinorBtnLocal) {
-        releaseMinorBtnLocal.addEventListener('click', async () => {
-          const resp = await fetch(`${SERVER_URL}/faction/release`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:currentPlayer.id}) }).then(r => r.json());
-          if (resp.success) {
-            currentPlayer.hashtag = null;
-            currentPlayer.likes = 0;
-            applyServerResponse(resp, null);
-            factionPanel.style.display = 'none';
-          } else alert(resp.error);
-        });
-      }
+factionBtn.addEventListener('click', async () => {
+  const res = await fetch(`${SERVER_URL}/faction/info`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId: currentPlayer.id })
+  }).then(r => r.json());
+  if (!res.faction) {
+    factionTitle.textContent = 'Вы не состоите во фракции';
+    factionContent.innerHTML = '';
+    factionPanel.style.display = 'block';
+    return;
+  }
+  const f = res.faction;
+  factionTitle.textContent = `Фракция #${res.baseHashtag}`;
+  let html = '';
+  if (f.commander) html += `<p>Командир: ${f.commander.nickname}</p>`;
+  html += '<h4>Подчинённые:</h4>';
+  f.minors.filter(m => m.occupiedBy).forEach(m => {
+    html += `<p>${m.nickname} (${m.tag}) – ${m.likes} лайков <button data-action="view">Обзор</button></p>`;
+  });
+  html += '<h4>Свободные малые хештеги:</h4>';
+  f.minors.filter(m => !m.occupiedBy).forEach(m => {
+    html += `<p>#${m.tag} – ${m.likes} лайков <button data-action="claim" data-tag="${m.tag}">Занять</button></p>`;
+  });
+  html += '<h4>Наблюдатели:</h4>';
+  f.observers.forEach(o => {
+    html += `<p>${o.nickname}</p>`;
+  });
+  // Кнопка освобождения для подчинённого
+  if (!currentPlayer.hashtag && currentPlayer.nickname) {
+    const myMinor = f.minors.find(m => m.occupiedBy === currentPlayer.id);
+    if (myMinor) html += `<button id="releaseMinorBtn">Освободить хештег</button>`;
+  }
+  factionContent.innerHTML = html;
+  factionPanel.style.display = 'block';
+  
+  // Обработчики кнопок
+  document.querySelectorAll('[data-action="claim"]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const tag = e.target.dataset.tag;
+      const resp = await fetch(`${SERVER_URL}/faction/claim`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentPlayer.id, baseHashtag: res.baseHashtag, minorTag: tag })
+      }).then(r => r.json());
+      if (resp.success) {
+        currentPlayer.hashtag = resp.minorTag;
+        currentPlayer.likes = resp.player.likes;
+        applyServerResponse(resp, null);
+        factionPanel.style.display = 'none';
+      } else alert(resp.error);
     });
-    document.getElementById('closeFactionBtn').addEventListener('click', () => { factionPanel.style.display = 'none'; });
+  });
+  const releaseMinorBtnLocal = document.getElementById('releaseMinorBtn');
+  if (releaseMinorBtnLocal) {
+    releaseMinorBtnLocal.addEventListener('click', async () => {
+      const resp = await fetch(`${SERVER_URL}/faction/release`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentPlayer.id })
+      }).then(r => r.json());
+      if (resp.success) {
+        currentPlayer.hashtag = null;
+        currentPlayer.likes = 0;
+        applyServerResponse(resp, null);
+        factionPanel.style.display = 'none';
+      } else alert(resp.error);
+    });
+  }
+});
 
-    // ---------- КАМЕРА ----------
+document.getElementById('closeFactionBtn').addEventListener('click', () => {
+  factionPanel.style.display = 'none';
+});
+
+    // ---------- ГРАНИЦЫ КАМЕРЫ ----------
     function clampCamera() {
-      const worldW = MAP_W * CELL_SIZE, worldH = MAP_H * CELL_SIZE;
-      const visibleW = canvas.width / zoom, visibleH = canvas.height / zoom;
-      const padX = visibleW * 0.5, padY = visibleH * 0.5;
+      const worldW = MAP_W * CELL_SIZE;
+      const worldH = MAP_H * CELL_SIZE;
+      const visibleW = canvas.width / zoom;
+      const visibleH = canvas.height / zoom;
+      const padX = visibleW * 0.5;
+      const padY = visibleH * 0.5;
       viewX = Math.max(-padX, Math.min(viewX, worldW - visibleW + padX));
       viewY = Math.max(-padY, Math.min(viewY, worldH - visibleH + padY));
     }
-    function isValidMap(m) { return Array.isArray(m) && m.length === MAP_H && m[0]?.length === MAP_W; }
+
+    function isValidMap(m) {
+      return Array.isArray(m) && m.length === MAP_H && m[0]?.length === MAP_W;
+    }
+
     function updateAdjacentSet() {
       adjacentSet.clear();
       if (!currentPlayer.id || !currentPlayer.hashtag) return;
@@ -361,6 +432,7 @@
         }
       }
     }
+
     function getTerritoryBounds(ownerId) {
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, count = 0;
       for (let y=0; y<MAP_H; y++) {
@@ -374,76 +446,174 @@
       }
       return { minX, minY, maxX, maxY, count, width: maxX-minX+1, height: maxY-minY+1 };
     }
+
     function findClosestOwnCell(worldX, worldY) {
       if (!currentPlayer.id || !currentPlayer.hashtag) return null;
       let bestCell = null, bestDist = Infinity;
       for (let y=0; y<MAP_H; y++) {
         for (let x=0; x<MAP_W; x++) {
           if (map[y][x].ownerId === currentPlayer.id) {
-            const cx = x * CELL_SIZE + CELL_SIZE/2, cy = y * CELL_SIZE + CELL_SIZE/2;
+            const cx = x * CELL_SIZE + CELL_SIZE/2;
+            const cy = y * CELL_SIZE + CELL_SIZE/2;
             const d = Math.hypot(cx - worldX, cy - worldY);
-            if (d < bestDist) { bestDist = d; bestCell = { x, y, worldX: cx, worldY: cy }; }
+            if (d < bestDist) {
+              bestDist = d;
+              bestCell = { x, y, worldX: cx, worldY: cy };
+            }
           }
         }
       }
       return bestCell;
     }
+
     function screenToWorld(sx, sy) {
       const rect = canvas.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return { x: -1, y: -1 };
-      const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
-      const canvasX = (sx - rect.left) * scaleX, canvasY = (sy - rect.top) * scaleY;
-      const worldX = canvasX / zoom + viewX, worldY = canvasY / zoom + viewY;
-      return { x: Math.floor(worldX / CELL_SIZE), y: Math.floor(worldY / CELL_SIZE) };
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const canvasX = (sx - rect.left) * scaleX;
+      const canvasY = (sy - rect.top) * scaleY;
+      const worldX = canvasX / zoom + viewX;
+      const worldY = canvasY / zoom + viewY;
+      return {
+        x: Math.floor(worldX / CELL_SIZE),
+        y: Math.floor(worldY / CELL_SIZE)
+      };
     }
 
-    // ---------- DRAG ----------
+    // ---------- УПРАВЛЕНИЕ КАМЕРОЙ ----------
     const DRAG_THRESHOLD = 4;
     let isDragging = false, hasMoved = false;
     let dragStartX, dragStartY, dragStartViewX, dragStartViewY;
+
     canvas.addEventListener('mousedown', e => {
       if (e.button !== 0) return;
-      isDragging = true; hasMoved = false;
-      dragStartX = e.clientX; dragStartY = e.clientY;
-      dragStartViewX = viewX; dragStartViewY = viewY;
+      isDragging = true;
+      hasMoved = false;
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+      dragStartViewX = viewX;
+      dragStartViewY = viewY;
       canvas.style.cursor = 'grabbing';
       const {x, y} = screenToWorld(e.clientX, e.clientY);
       clickTarget = (x >= 0 && x < MAP_W && y >= 0 && y < MAP_H) ? { x, y } : null;
       e.preventDefault();
     });
+
     window.addEventListener('mousemove', e => {
       if (!isDragging) return;
-      const dx = e.clientX - dragStartX, dy = e.clientY - dragStartY;
+      const dx = e.clientX - dragStartX;
+      const dy = e.clientY - dragStartY;
       if (!hasMoved && Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
       hasMoved = true;
       const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / (rect.width || 1), scaleY = canvas.height / (rect.height || 1);
+      const scaleX = canvas.width / (rect.width || 1);
+      const scaleY = canvas.height / (rect.height || 1);
       viewX = dragStartViewX - (dx * scaleX) / zoom;
       viewY = dragStartViewY - (dy * scaleY) / zoom;
-      clampCamera(); drawMap();
+      clampCamera();
+      drawMap();
     });
-    window.addEventListener('mouseup', () => { isDragging = false; canvas.style.cursor = 'default'; });
+
+    window.addEventListener('mouseup', () => {
+      isDragging = false;
+      canvas.style.cursor = 'default';
+    });
+
     canvas.addEventListener('wheel', e => {
       e.preventDefault();
       const rect = canvas.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return;
-      const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
-      const mx = (e.clientX - rect.left) * scaleX, my = (e.clientY - rect.top) * scaleY;
-      const worldX = mx / zoom + viewX, worldY = my / zoom + viewY;
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const mx = (e.clientX - rect.left) * scaleX;
+      const my = (e.clientY - rect.top) * scaleY;
+      const worldX = mx / zoom + viewX;
+      const worldY = my / zoom + viewY;
       const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * (e.deltaY > 0 ? 0.9 : 1.1)));
       if (newZoom !== zoom) {
         viewX = worldX - mx / newZoom;
         viewY = worldY - my / newZoom;
         zoom = newZoom;
-        clampCamera(); drawMap();
+        clampCamera();
+        drawMap();
       }
     });
 
-    // Тач-управление (кратко)
+    // Тач-управление
     let lastTouches = null;
-    canvas.addEventListener('touchstart', e => { /* стандартный код */ });
-    canvas.addEventListener('touchmove', e => { /* стандартный код */ });
-    canvas.addEventListener('touchend', e => { /* стандартный код */ });
+    canvas.addEventListener('touchstart', e => {
+      e.preventDefault();
+      const t = e.touches;
+      if (t.length === 1) {
+        isDragging = true;
+        hasMoved = false;
+        dragStartX = t[0].clientX;
+        dragStartY = t[0].clientY;
+        dragStartViewX = viewX;
+        dragStartViewY = viewY;
+        const {x, y} = screenToWorld(t[0].clientX, t[0].clientY);
+        clickTarget = (x >= 0 && x < MAP_W && y >= 0 && y < MAP_H) ? { x, y } : null;
+      } else if (t.length === 2) {
+        isDragging = false;
+        lastTouches = {
+          dist: Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY),
+          cx: (t[0].clientX + t[1].clientX) / 2,
+          cy: (t[0].clientY + t[1].clientY) / 2,
+          viewX, viewY, zoom
+        };
+      }
+    });
+
+    canvas.addEventListener('touchmove', e => {
+      e.preventDefault();
+      const t = e.touches;
+      if (t.length === 1 && isDragging) {
+        const dx = t[0].clientX - dragStartX;
+        const dy = t[0].clientY - dragStartY;
+        if (!hasMoved && Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
+        hasMoved = true;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / (rect.width || 1);
+        const scaleY = canvas.height / (rect.height || 1);
+        viewX = dragStartViewX - (dx * scaleX) / zoom;
+        viewY = dragStartViewY - (dy * scaleY) / zoom;
+        clampCamera();
+        drawMap();
+      } else if (t.length === 2 && lastTouches) {
+        const newDist = Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+        const scale = newDist / lastTouches.dist;
+        const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, lastTouches.zoom * scale));
+        const rect = canvas.getBoundingClientRect();
+        const sx = canvas.width / (rect.width || 1);
+        const sy = canvas.height / (rect.height || 1);
+        const cx = (lastTouches.cx - rect.left) * sx;
+        const cy = (lastTouches.cy - rect.top) * sy;
+        const worldX = cx / lastTouches.zoom + lastTouches.viewX;
+        const worldY = cy / lastTouches.zoom + lastTouches.viewY;
+        zoom = newZoom;
+        viewX = worldX - cx / newZoom;
+        viewY = worldY - cy / newZoom;
+        lastTouches = { dist: newDist, cx: lastTouches.cx, cy: lastTouches.cy, viewX, viewY, zoom };
+        clampCamera();
+        drawMap();
+      }
+    });
+
+    canvas.addEventListener('touchend', e => {
+      if (e.touches.length === 0) {
+        isDragging = false;
+        lastTouches = null;
+        if (!hasMoved && clickTarget && !animating && !spectating && currentPlayer.hashtag) {
+          const {x, y} = clickTarget;
+          if (adjacentSet.has(`${x},${y}`)) {
+            showAttackPanel(x, y);
+          } else if (map[y] && map[y][x] && map[y][x].ownerId !== currentPlayer.id) {
+            updateInfo('Можно атаковать только подсвеченные клетки');
+          }
+        }
+      }
+    });
 
     // ---------- КЛИК ----------
     canvas.addEventListener('click', e => {
@@ -452,17 +622,57 @@
       if (!clickTarget) return;
       const {x, y} = clickTarget;
       if (x < 0 || x >= MAP_W || y < 0 || y >= MAP_H) return;
-      if (!adjacentSet.has(`${x},${y}`)) { updateInfo('Можно атаковать только подсвеченные клетки'); return; }
+      if (!adjacentSet.has(`${x},${y}`)) {
+        updateInfo('Можно атаковать только подсвеченные клетки');
+        return;
+      }
       showAttackPanel(x, y);
       clickTarget = null;
     });
-    canvas.addEventListener('dblclick', e => { /* двойной клик для центрирования */ });
+
+    canvas.addEventListener('dblclick', e => {
+      if (!currentPlayer.id || !currentPlayer.hashtag) return;
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / (rect.width || 1);
+      const scaleY = canvas.height / (rect.height || 1);
+      const mx = (e.clientX - rect.left) * scaleX;
+      const my = (e.clientY - rect.top) * scaleY;
+      const worldX = mx / zoom + viewX;
+      const worldY = my / zoom + viewY;
+      const closest = findClosestOwnCell(worldX, worldY);
+      if (closest) {
+        viewX = closest.worldX - canvas.width / (2 * zoom);
+        viewY = closest.worldY - canvas.height / (2 * zoom);
+        clampCamera();
+        drawMap();
+      }
+    });
 
     // ---------- ПАНЕЛЬ АТАКИ ----------
-    function showAttackPanel(x, y) { /* ... */ }
-    function hideAttackPanel() { /* ... */ }
-    document.getElementById('powerPlus').addEventListener('click', () => { /* ... */ });
-    document.getElementById('powerMinus').addEventListener('click', () => { /* ... */ });
+    function showAttackPanel(x, y) {
+      selectedTarget = { x, y };
+      targetCoords.textContent = `${x},${y}`;
+      powerSlider.max = currentPlayer.likes;
+      powerSlider.value = 1;
+      powerValue.textContent = '1';
+      attackPanel.style.display = 'block';
+    }
+    function hideAttackPanel() { attackPanel.style.display = 'none'; selectedTarget = null; }
+    powerSlider.addEventListener('input', () => {
+      powerValue.textContent = powerSlider.value;
+    });
+    document.getElementById('powerPlus').addEventListener('click', () => {
+      if (parseInt(powerSlider.value) < currentPlayer.likes) {
+        powerSlider.value = parseInt(powerSlider.value) + 1;
+        powerValue.textContent = powerSlider.value;
+      }
+    });
+    document.getElementById('powerMinus').addEventListener('click', () => {
+      if (parseInt(powerSlider.value) > 1) {
+        powerSlider.value = parseInt(powerSlider.value) - 1;
+        powerValue.textContent = powerSlider.value;
+      }
+    });
     document.getElementById('attackBtn').addEventListener('click', () => {
       if (!selectedTarget || animating) return;
       attackCell(selectedTarget.x, selectedTarget.y, Number(powerSlider.value));
@@ -470,22 +680,60 @@
     });
     document.getElementById('cancelAttackBtn').addEventListener('click', hideAttackPanel);
 
-    // ---------- МЕНЮ ----------
+       // ---------- МЕНЮ ----------
     menuBtn.addEventListener('click', () => {
-      if (currentPlayer.hashtag) {
-        menuStatus.textContent = 'Вы играете за: ' + currentPlayer.hashtag;
-        releaseBtn.style.display = 'inline-block';
-        chooseHashtagBtn.style.display = 'none';
-      } else {
-        menuStatus.textContent = 'Режим наблюдателя';
-        releaseBtn.style.display = 'none';
-        chooseHashtagBtn.style.display = 'inline-block';
-      }
-      menuPanel.style.display = 'block';
+  if (currentPlayer.hashtag) {
+    menuStatus.textContent = 'Вы играете за: ' + currentPlayer.hashtag;
+    // Если это малый хештег, основную кнопку освобождения не показываем
+    if (!AVAILABLE_HASHTAGS.includes(currentPlayer.hashtag)) {
+      releaseBtn.style.display = 'none';
+    } else {
+      releaseBtn.style.display = 'inline-block';
+    }
+    chooseHashtagBtn.style.display = 'none';
+  } else {
+    menuStatus.textContent = 'Режим наблюдателя';
+    releaseBtn.style.display = 'none';
+    chooseHashtagBtn.style.display = 'inline-block';
+  }
+  menuPanel.style.display = 'block';
+});
+
+    document.getElementById('closeMenuBtn').addEventListener('click', () => {
+      menuPanel.style.display = 'none';
     });
-    document.getElementById('closeMenuBtn').addEventListener('click', () => { menuPanel.style.display = 'none'; });
-    releaseBtn.addEventListener('click', async () => { /* освобождение хештега */ });
-    chooseHashtagBtn.addEventListener('click', () => { /* показать выбор хештега */ });
+
+    releaseBtn.addEventListener('click', async () => {
+      if (!currentPlayer.hashtag) return;
+      try {
+        const res = await fetch(`${SERVER_URL}/release`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentPlayer.id })
+        }).then(r => r.json());
+        if (res.success) {
+          currentPlayer.hashtag = null;
+          currentPlayer.likes = 0;
+          applyServerResponse(res, null);
+          setTimeout(() => fetchState(), 1000);
+          menuPanel.style.display = 'none';
+          updateInfo('Хештег освобождён. Ваши клетки стали нейтральными.');
+        } else {
+          alert(res.error);
+        }
+      } catch (e) {
+        alert('Ошибка сети');
+      }
+    });
+
+    chooseHashtagBtn.addEventListener('click', async () => {
+  menuPanel.style.display = 'none';
+  // Сначала принудительно обновим данные
+  await fetchState();
+  // Теперь откроем окно выбора с актуальными лайками
+  const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
+  showSelection(AVAILABLE_HASHTAGS, taken);
+});
 
     // ---------- СЕРВЕРНЫЕ ЗАПРОСЫ ----------
     function applyServerResponse(data, capturedCells) {
@@ -532,28 +780,66 @@
       }
     }
 
-    function claimHashtag(hashtag) { /* ... */ }
+    function claimHashtag(hashtag) {
+      fetch(`${SERVER_URL}/claim`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:currentPlayer.id, hashtag}) })
+      .then(r=>r.json()).then(res=>{
+        if (res.success) {
+          currentPlayer.color = res.player.color;
+          currentPlayer.spawnX = res.player.spawnX; currentPlayer.spawnY = res.player.spawnY;
+          spectating = false;
+          applyServerResponse(res, null);
+          hideSelection();
+        } else alert(res.error);
+      });
+    }
+
     function attackCell(x, y, amount) {
       fetch(`${SERVER_URL}/attack`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:currentPlayer.id, x, y, amount}) })
-        .then(r=>r.json())
-        .then(res => {
-          if (res.success) {
-            updateInfo(`Захвачено ${res.capturedCells.length} клеток, потрачено ${res.spent} лайков`);
-            applyServerResponse(res, res.capturedCells);
-          } else {
-            updateInfo(`Ошибка: ${res.error}`);
-            applyServerResponse(res, null);
-          }
-        });
+      .then(r=>r.json()).then(res => {
+        if (res.success) {
+          updateInfo(`Захвачено ${res.capturedCells.length} клеток, потрачено ${res.spent} лайков`);
+          applyServerResponse(res, res.capturedCells);
+        } else {
+          updateInfo(`Ошибка: ${res.error}`);
+          applyServerResponse(res, null);
+        }
+      });
     }
-    function fetchState() { /* ... */ }
-    function spectate() { /* ... */ }
+
+    function fetchState() {
+  if (!currentPlayer.id || animating) return Promise.resolve();
+  return fetch(`${SERVER_URL}/state`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId: currentPlayer.id })
+  })
+  .then(r => r.json())
+  .then(data => {
+    applyServerResponse(data, null);
+    // Обновляем глобальные переменные для окна выбора
+    if (data.playersInfo) playersInfo = data.playersInfo;
+    if (data.hashtagLikes) hashtagLikes = data.hashtagLikes;
+    return data;
+  });
+}
+
+    function spectate() {
+      fetch(`${SERVER_URL}/spectate`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:currentPlayer.id}) })
+      .then(() => {
+        currentPlayer.hashtag = null;
+        spectating = true;
+        gameoverDiv.style.display = 'none';
+        hideSelection();
+        updateInfo('Режим наблюдателя');
+        drawMap();
+      });
+    }
 
     let selectionRefreshInterval = null;
     function showSelection(hashtags, takenHashtags) {
       const listDiv = document.getElementById('hashtagList');
       const spectateBtn = document.getElementById('spectateBtn');
-      function buildList(likesData) {
+        function buildList(likesData) {
         listDiv.innerHTML = '';
         hashtags.forEach(tag => {
           const btn = document.createElement('button');
@@ -563,6 +849,7 @@
             btn.classList.add('taken');
             btn.disabled = true;
             btn.title = 'Хештег занят';
+            // Кнопка присоединения к фракции
             const joinBtn = document.createElement('button');
             joinBtn.textContent = '👥';
             joinBtn.style.marginLeft = '4px';
@@ -594,15 +881,25 @@
       if (selectionRefreshInterval) clearInterval(selectionRefreshInterval);
       selectionRefreshInterval = setInterval(async () => {
         try {
-          const res = await fetch(`${SERVER_URL}/state`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:currentPlayer.id}) }).then(r=>r.json());
-          if (res.hashtagLikes) { hashtagLikes = res.hashtagLikes; buildList(hashtagLikes); }
+          const res = await fetch(`${SERVER_URL}/state`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: currentPlayer.id })
+          }).then(r => r.json());
+          if (res.hashtagLikes) {
+            hashtagLikes = res.hashtagLikes;
+            buildList(hashtagLikes);
+          }
         } catch (e) {}
       }, 5000);
       spectateBtn.onclick = spectate;
       selectionDiv.style.display = 'block';
     }
     function hideSelection() {
-      if (selectionRefreshInterval) { clearInterval(selectionRefreshInterval); selectionRefreshInterval = null; }
+      if (selectionRefreshInterval) {
+        clearInterval(selectionRefreshInterval);
+        selectionRefreshInterval = null;
+      }
       selectionDiv.style.display = 'none';
     }
 
@@ -645,7 +942,10 @@
       if (!animating && currentPlayer.id && currentPlayer.hashtag && adjacentSet.size) {
         ctx.strokeStyle = '#FFD700';
         ctx.lineWidth = 1.5 / zoom;
-        adjacentSet.forEach(coord => { const [cx, cy] = coord.split(',').map(Number); ctx.strokeRect(cx * CELL_SIZE, cy * CELL_SIZE, CELL_SIZE, CELL_SIZE); });
+        adjacentSet.forEach(coord => {
+          const [cx, cy] = coord.split(',').map(Number);
+          ctx.strokeRect(cx * CELL_SIZE, cy * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        });
       }
       const drawnOwners = new Set();
       for (let y = 0; y < MAP_H; y++) {
@@ -661,6 +961,7 @@
           const centerY = (bounds.minY + bounds.maxY) / 2 * CELL_SIZE + CELL_SIZE / 2;
           const area = bounds.width * bounds.height;
           let fontSize = Math.max(10, Math.sqrt(area) * 2.2);
+          // Проверяем, малый ли это хештег (не входит в список базовых)
           const isMinor = info.hashtag && !AVAILABLE_HASHTAGS.includes(info.hashtag);
           if (isMinor) {
             fontSize *= 0.7;
@@ -678,13 +979,15 @@
       }
       ctx.textAlign = 'start';
       ctx.restore();
-
       if (currentPlayer.id && currentPlayer.hashtag) {
-        const arrowX = canvas.width / 2, arrowY = canvas.height - 60;
-        const worldX = arrowX / zoom + viewX, worldY = arrowY / zoom + viewY;
+        const arrowX = canvas.width / 2;
+        const arrowY = canvas.height - 60;
+        const worldX = arrowX / zoom + viewX;
+        const worldY = arrowY / zoom + viewY;
         const closest = findClosestOwnCell(worldX, worldY);
         if (closest) {
-          const dx = closest.worldX - worldX, dy = closest.worldY - worldY;
+          const dx = closest.worldX - worldX;
+          const dy = closest.worldY - worldY;
           const len = Math.sqrt(dx * dx + dy * dy);
           if (len > 1) {
             const angle = Math.atan2(dy, dx);
@@ -692,36 +995,46 @@
             ctx.translate(arrowX, arrowY);
             ctx.rotate(angle);
             ctx.fillStyle = '#FFD700';
-            ctx.shadowColor = '#000'; ctx.shadowBlur = 6;
+            ctx.shadowColor = '#000';
+            ctx.shadowBlur = 6;
             ctx.beginPath();
-            ctx.moveTo(12, 0); ctx.lineTo(-8, -8); ctx.lineTo(-8, 8); ctx.closePath();
+            ctx.moveTo(12, 0);
+            ctx.lineTo(-8, -8);
+            ctx.lineTo(-8, 8);
+            ctx.closePath();
             ctx.fill();
             ctx.restore();
           }
         }
       }
-
-      if (currentPlayer.id) menuBtn.style.display = 'block'; else menuBtn.style.display = 'none';
+      if (currentPlayer.id) {
+        menuBtn.style.display = 'block';
+      } else {
+        menuBtn.style.display = 'none';
+      }
       if (currentPlayer.id && currentPlayer.hashtag) {
         legend.style.display = 'flex';
         legendColor.style.backgroundColor = currentPlayer.color;
         legendHashtag.textContent = '#' + currentPlayer.hashtag;
-      } else { legend.style.display = 'none'; }
+      } else {
+        legend.style.display = 'none';
+      }
       updateLeaderboard();
-
-      // Штриховка и пунктир для подчинённых
+            // Штриховка и пунктир для подчинённых
       for (let y = 0; y < MAP_H; y++) {
         for (let x = 0; x < MAP_W; x++) {
           const cell = map[y][x];
           if (cell.ownerId) {
             const owner = players[cell.ownerId];
             if (owner && owner.hashtag && !AVAILABLE_HASHTAGS.includes(owner.hashtag)) {
+              // Подчинённый
               ctx.save();
               ctx.strokeStyle = '#000';
               ctx.lineWidth = 1 / zoom;
               ctx.setLineDash([3 / zoom, 2 / zoom]);
               ctx.strokeRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-              ctx.setLineDash([]);
+              ctx.setLineDash([]); // сброс
+              // Штриховка (диагональные линии)
               ctx.beginPath();
               ctx.strokeStyle = 'rgba(0,0,0,0.3)';
               ctx.lineWidth = 0.5 / zoom;
@@ -739,10 +1052,23 @@
       }
     }
 
-    function updateLeaderboard() { /* ... */ }
+    function updateLeaderboard() {
+      if (!leaderboard.length) { leaderboardDiv.style.display = 'none'; return; }
+      leaderboardDiv.style.display = 'block';
+      let html = '<strong>Топ-10</strong>';
+      leaderboard.forEach(e => {
+        html += `<div class="leader-item"><div class="leader-color" style="background:${e.color}"></div><span class="leader-tag">#${e.hashtag}</span><span class="leader-cells">${e.cells}</span></div>`;
+      });
+      leaderboardDiv.innerHTML = html;
+    }
+
     function updateInfo(text) { document.getElementById('info').textContent = text; }
+
     function animateCapture(cells, serverMap) {
-      if (!cells.length) { map = serverMap; updateAdjacentSet(); drawMap(); updateInfo(`Лайков: ${currentPlayer.likes}`); animating = false; return; }
+      if (!cells.length) {
+        map = serverMap; updateAdjacentSet(); drawMap(); updateInfo(`Лайков: ${currentPlayer.likes}`);
+        animating = false; return;
+      }
       animating = true; animationQueue = [...cells]; map = serverMap;
       function step() {
         if (!animationQueue.length) { animating = false; updateAdjacentSet(); drawMap(); updateInfo(`Лайков: ${currentPlayer.likes}`); return; }
@@ -758,9 +1084,16 @@
       .then(data => {
         currentPlayer.id = data.id;
         updateInfo(`Привет, ${data.first_name}! Соединяюсь с сервером...`);
-        return fetch(`${SERVER_URL}/join`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId: data.id}) });
+        return fetch(`${SERVER_URL}/join`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: data.id })
+        });
       })
-      .then(r => { if (!r.ok) throw new Error(`Ошибка сервера: ${r.status}`); return r.json(); })
+      .then(r => {
+        if (!r.ok) throw new Error(`Ошибка сервера: ${r.status}`);
+        return r.json();
+      })
       .then(state => {
         currentPlayer.color = state.player?.color || '#cccccc';
         if (state.player) {
@@ -774,13 +1107,20 @@
             document.getElementById('nicknameDisplay').style.display = 'inline';
           }
         }
-        MAP_W = state.worldW || MAP_W; MAP_H = state.worldH || MAP_H;
+        MAP_W = state.worldW || MAP_W;
+        MAP_H = state.worldH || MAP_H;
         leaderboard = state.leaderboard || [];
         hashtagLikes = state.hashtagLikes || {};
         gameEndTime = state.gameEndTime;
         gameOver = state.gameOver || false;
-        if (gameEndTime) { updateTimer(); timerInterval = setInterval(updateTimer, 1000); }
-        if (gameOver) { saveBtnDiv.style.display = 'block'; updateInfo('Игра завершена'); }
+        if (gameEndTime) {
+          updateTimer();
+          timerInterval = setInterval(updateTimer, 1000);
+        }
+        if (gameOver) {
+          saveBtnDiv.style.display = 'block';
+          updateInfo('Игра завершена');
+        }
         applyServerResponse(state, null);
         if (!currentPlayer.hashtag && !spectating) {
           const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
@@ -794,7 +1134,8 @@
       .catch(err => {
         updateInfo('⚠️ Нет связи с сервером: ' + err.message);
         console.error(err);
-        resizeCanvas(); drawMap();
+        resizeCanvas();
+        drawMap();
       });
 
     const AVAILABLE_HASHTAGS = [
