@@ -419,23 +419,25 @@ document.getElementById('closeFactionBtn').addEventListener('click', () => {
       return Array.isArray(m) && m.length === MAP_H && m[0]?.length === MAP_W;
     }
 
-    function updateAdjacentSet() {
-      adjacentSet.clear();
-      if (!currentPlayer.id || !currentPlayer.hashtag) return;
-      for (let y=0; y<MAP_H; y++) {
-        for (let x=0; x<MAP_W; x++) {
-          if (map[y][x].ownerId !== currentPlayer.id) {
-            for (const [dx,dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
-              const nx = x+dx, ny = y+dy;
-              if (nx>=0 && nx<MAP_W && ny>=0 && ny<MAP_H && map[ny][nx].ownerId === currentPlayer.id) {
-                adjacentSet.add(`${x},${y}`);
-                break;
-              }
-            }
-          }
+ function updateAdjacentSet() {
+  adjacentSet.clear();
+  if (!currentPlayer.id || !currentPlayer.hashtag) return;
+  for (let y=0; y<MAP_H; y++) {
+    for (let x=0; x<MAP_W; x++) {
+      const cell = map[y][x];
+      if (cell.ownerId === currentPlayer.id) continue;
+      // Пропускаем союзников
+      if (cell.ownerId && playersInfo[cell.ownerId]?.faction === currentPlayer.faction) continue;
+      for (const [dx,dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+        const nx = x+dx, ny = y+dy;
+        if (nx>=0 && nx<MAP_W && ny>=0 && ny<MAP_H && map[ny][nx].ownerId === currentPlayer.id) {
+          adjacentSet.add(`${x},${y}`);
+          break;
         }
       }
     }
+  }
+}
 
     function getTerritoryBounds(ownerId) {
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, count = 0;
@@ -741,6 +743,12 @@ document.getElementById('closeFactionBtn').addEventListener('click', () => {
 
     // ---------- СЕРВЕРНЫЕ ЗАПРОСЫ ----------
     function applyServerResponse(data, capturedCells) {
+      if (data.player && data.player.faction !== undefined) {
+  currentPlayer.faction = data.player.faction;
+}
+if (data.faction !== undefined) {
+  currentPlayer.faction = data.faction;
+}
       if (data.player) {
         currentPlayer.likes = data.player.likes;
         if (!currentPlayer.hashtag && data.player.hashtag) currentPlayer.hashtag = data.player.hashtag;
@@ -752,8 +760,10 @@ document.getElementById('closeFactionBtn').addEventListener('click', () => {
           document.getElementById('nicknameDisplay').textContent = 'Ник: ' + data.player.nickname;
           document.getElementById('nicknameDisplay').style.display = 'inline';
         }
+        if (data.player.faction !== undefined) currentPlayer.faction = data.player.faction;
       }
       if (data.playersInfo) playersInfo = data.playersInfo;
+      if (data.faction !== undefined) currentPlayer.faction = data.faction;
       if (data.worldW) MAP_W = data.worldW; if (data.worldH) MAP_H = data.worldH;
       if (data.leaderboard) leaderboard = data.leaderboard;
       if (data.hashtagLikes) hashtagLikes = data.hashtagLikes;
@@ -1066,7 +1076,7 @@ for (let y = startY; y < endY; y++) {
             if (owner && owner.hashtag && !AVAILABLE_HASHTAGS.includes(owner.hashtag)) {
               // Подчинённый
               ctx.save();
-              ctx.strokeStyle = '#000';
+              ctx.strokeStyle = 'black';
               ctx.lineWidth = 1 / zoom;
               ctx.setLineDash([3 / zoom, 2 / zoom]);
               ctx.strokeRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
