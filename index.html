@@ -422,15 +422,15 @@ document.getElementById('closeFactionBtn').addEventListener('click', () => {
  function updateAdjacentSet() {
   adjacentSet.clear();
   if (!currentPlayer.id || !currentPlayer.hashtag) return;
-  for (let y=0; y<MAP_H; y++) {
-    for (let x=0; x<MAP_W; x++) {
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
       const cell = map[y][x];
       if (cell.ownerId === currentPlayer.id) continue;
-      // Пропускаем союзников
+      // не подсвечиваем клетки союзников
       if (cell.ownerId && playersInfo[cell.ownerId]?.faction === currentPlayer.faction) continue;
-      for (const [dx,dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
-        const nx = x+dx, ny = y+dy;
-        if (nx>=0 && nx<MAP_W && ny>=0 && ny<MAP_H && map[ny][nx].ownerId === currentPlayer.id) {
+      for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx >= 0 && nx < MAP_W && ny >= 0 && ny < MAP_H && map[ny][nx].ownerId === currentPlayer.id) {
           adjacentSet.add(`${x},${y}`);
           break;
         }
@@ -1076,7 +1076,7 @@ for (let y = startY; y < endY; y++) {
             if (owner && owner.hashtag && !AVAILABLE_HASHTAGS.includes(owner.hashtag)) {
               // Подчинённый
               ctx.save();
-              ctx.strokeStyle = 'black';
+              ctx.strokeStyle = 'red';
               ctx.lineWidth = 1 / zoom;
               ctx.setLineDash([3 / zoom, 2 / zoom]);
               ctx.strokeRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
