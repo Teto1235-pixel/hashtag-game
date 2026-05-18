@@ -235,7 +235,7 @@ const factionContent = document.getElementById('factionContent');
     // --- Никнейм ---
     document.getElementById('setNicknameBtn').addEventListener('click', () => {
       const nick = document.getElementById('nicknameInput').value.trim();
-      if (!nick) return alert('Введите ник');
+      if (!nick) return updateInfo('Введите ник');
       fetch(`${SERVER_URL}/nickname`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -243,7 +243,7 @@ const factionContent = document.getElementById('factionContent');
       })
       .then(r => r.json())
       .then(res => {
-        if (res.error) return alert(res.error);
+        if (res.error) return updateInfo(res.error);
         currentPlayer.nickname = nick;
         nicknameSet = true;
         document.getElementById('nicknameInput').style.display = 'none';
@@ -348,10 +348,22 @@ factionBtn.addEventListener('click', async () => {
   f.minors.filter(m => m.occupiedBy).forEach(m => {
     html += `<p>${m.nickname} (${m.tag}) – ${m.likes} лайков <button data-action="view">Обзор</button></p>`;
   });
-  html += '<h4>Свободные малые хештеги:</h4>';
+  html += '<h4>Свободные малые хештеги:</h4>'; 
   f.minors.filter(m => !m.occupiedBy).forEach(m => {
     html += `<p>#${m.tag} – ${m.likes} лайков <button data-action="claim" data-tag="${m.tag}">Занять</button></p>`;
   });
+  html += '<h4>Передать лайки</h4>';
+html += '<p><select id="donateTarget">';
+// добавить option'ы: командир и каждый подчинённый (кроме себя)
+if (f.commander && f.commander.userId !== currentPlayer.id) {
+  html += `<option value="${f.commander.userId}">Командир ${f.commander.nickname}</option>`;
+}
+f.minors.filter(m => m.occupiedBy && m.occupiedBy !== currentPlayer.id).forEach(m => {
+  html += `<option value="${m.occupiedBy}">${m.nickname} (${m.tag})</option>`;
+});
+html += '</select>';
+html += '<input type="number" id="donateAmount" min="1" placeholder="Сколько">';
+html += '<button id="donateBtn">Передать</button></p>';
   html += '<h4>Наблюдатели:</h4>';
   f.observers.forEach(o => {
     html += `<p>${o.nickname}</p>`;
@@ -399,6 +411,22 @@ factionBtn.addEventListener('click', async () => {
   }
 });
 
+ const donateBtn = document.getElementById('donateBtn');
+if (donateBtn) {
+  donateBtn.addEventListener('click', async () => {
+    const target = document.getElementById('donateTarget').value;
+    const amount = parseInt(document.getElementById('donateAmount').value);
+    if (!amount || amount < 1) return;
+    const resp = await fetch(`${SERVER_URL}/faction/donate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: currentPlayer.id, targetUserId: target, amount })
+    }).then(r => r.json());
+    if (resp.success) {
+      factionBtn.click(); // обновить панель
+    } else updateInfo(resp.error);
+  });
+}
 document.getElementById('closeFactionBtn').addEventListener('click', () => {
   factionPanel.style.display = 'none';
 });
@@ -430,7 +458,10 @@ document.getElementById('closeFactionBtn').addEventListener('click', () => {
       if (cell.ownerId && playersInfo[cell.ownerId]?.faction === currentPlayer.faction) continue;
       for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
         const nx = x + dx, ny = y + dy;
-        if (nx >= 0 && nx < MAP_W && ny >= 0 && ny < MAP_H && map[ny][nx].ownerId === currentPlayer.id) {
+        if (nx >= 0 && nx < MAP_W && ny >= 0 && ny < MAP_H &&
+    (map[ny][nx].ownerId === currentPlayer.id ||
+     (AVAILABLE_HASHTAGS.includes(currentPlayer.hashtag) &&
+      playersInfo[map[ny][nx].ownerId]?.faction === currentPlayer.faction))) {
           adjacentSet.add(`${x},${y}`);
           break;
         }
@@ -865,6 +896,10 @@ if (data.faction !== undefined) {
     function showSelection(hashtags, takenHashtags) {
       const listDiv = document.getElementById('hashtagList');
       const spectateBtn = document.getElementById('spectateBtn');
+      if (!currentPlayer.nickname) {
+       updateInfo('Сначала задайте ник');
+       return;
+      }
         function buildList(likesData) {
         listDiv.innerHTML = '';
         hashtags.forEach(tag => {
@@ -889,11 +924,13 @@ if (data.faction !== undefined) {
               })
               .then(r => r.json())
               .then(res => {
-                if (res.success) {
-                  alert('Вы присоединились к фракции как наблюдатель');
-                  hideSelection();
-                } else alert(res.error);
-              });
+  if (res.success) {
+    hideSelection();
+    factionBtn.click(); // автоматически открыть панель фракции
+  } else {
+     updateInfo(res.error); // или updateInfo(res.error)
+  }
+});
             };
             listDiv.appendChild(btn);
             listDiv.appendChild(joinBtn);
@@ -1025,6 +1062,36 @@ for (let y = startY; y < endY; y++) {
         }
       }
       ctx.textAlign = 'start';
+      // Штриховка и пунктир для подчинённых
+      for (let y = 0; y < MAP_H; y++) {
+        for (let x = 0; x < MAP_W; x++) {
+          const cell = map[y][x];
+          if (cell.ownerId) {
+            const owner = playersInfo[cell.ownerId];
+            if (owner && owner.hashtag && !AVAILABLE_HASHTAGS.includes(owner.hashtag)) {
+              // Подчинённый
+              ctx.save();
+              ctx.strokeStyle = 'black';
+              ctx.lineWidth = 1 / zoom;
+              ctx.setLineDash([3 / zoom, 2 / zoom]);
+              ctx.strokeRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+              ctx.setLineDash([]); // сброс
+              // Штриховка (диагональные линии)
+              ctx.beginPath();
+              ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+              ctx.lineWidth = 0.5 / zoom;
+              for (let i = 0; i < CELL_SIZE; i += 4) {
+                ctx.moveTo(x * CELL_SIZE + i, y * CELL_SIZE);
+                ctx.lineTo(x * CELL_SIZE, y * CELL_SIZE + i);
+                ctx.moveTo(x * CELL_SIZE + i, y * CELL_SIZE + CELL_SIZE);
+                ctx.lineTo(x * CELL_SIZE + CELL_SIZE, y * CELL_SIZE + i);
+              }
+              ctx.stroke();
+              ctx.restore();
+            }
+          }
+        }
+      }
       ctx.restore();
       if (currentPlayer.id && currentPlayer.hashtag) {
         const arrowX = canvas.width / 2;
@@ -1054,10 +1121,14 @@ for (let y = startY; y < endY; y++) {
           }
         }
       }
-      if (currentPlayer.id) {
+      if (currentPlayer.id && currentPlayer.nickname && (currentPlayer.hashtag || currentPlayer.faction)) {
         menuBtn.style.display = 'block';
+        factionBtn.style.display = 'block';
+        chatToggleBtn.style.display = 'block';
       } else {
         menuBtn.style.display = 'none';
+        factionBtn.style.display = 'none';
+        chatToggleBtn.style.display = 'none';
       }
       if (currentPlayer.id && currentPlayer.hashtag) {
         legend.style.display = 'flex';
@@ -1067,36 +1138,6 @@ for (let y = startY; y < endY; y++) {
         legend.style.display = 'none';
       }
       updateLeaderboard();
-            // Штриховка и пунктир для подчинённых
-      for (let y = 0; y < MAP_H; y++) {
-        for (let x = 0; x < MAP_W; x++) {
-          const cell = map[y][x];
-          if (cell.ownerId) {
-            const owner = playersInfo[cell.ownerId];
-            if (owner && owner.hashtag && !AVAILABLE_HASHTAGS.includes(owner.hashtag)) {
-              // Подчинённый
-              ctx.save();
-              ctx.strokeStyle = 'red';
-              ctx.lineWidth = 1 / zoom;
-              ctx.setLineDash([3 / zoom, 2 / zoom]);
-              ctx.strokeRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-              ctx.setLineDash([]); // сброс
-              // Штриховка (диагональные линии)
-              ctx.beginPath();
-              ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-              ctx.lineWidth = 0.5 / zoom;
-              for (let i = 0; i < CELL_SIZE; i += 4) {
-                ctx.moveTo(x * CELL_SIZE + i, y * CELL_SIZE);
-                ctx.lineTo(x * CELL_SIZE, y * CELL_SIZE + i);
-                ctx.moveTo(x * CELL_SIZE + i, y * CELL_SIZE + CELL_SIZE);
-                ctx.lineTo(x * CELL_SIZE + CELL_SIZE, y * CELL_SIZE + i);
-              }
-              ctx.stroke();
-              ctx.restore();
-            }
-          }
-        }
-      }
     }
 
     function updateLeaderboard() {
