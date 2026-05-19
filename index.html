@@ -896,10 +896,6 @@ if (data.faction !== undefined) {
     function showSelection(hashtags, takenHashtags) {
       const listDiv = document.getElementById('hashtagList');
       const spectateBtn = document.getElementById('spectateBtn');
-      if (!currentPlayer.nickname) {
-       updateInfo('Сначала задайте ник');
-       return;
-      }
         function buildList(likesData) {
         listDiv.innerHTML = '';
         hashtags.forEach(tag => {
@@ -917,6 +913,10 @@ if (data.faction !== undefined) {
             joinBtn.title = 'Присоединиться к фракции';
             joinBtn.onclick = (e) => {
               e.stopPropagation();
+              if (!currentPlayer.nickname) {
+                updateInfo('Сначала задайте ник');
+                  return;
+             }
               fetch(`${SERVER_URL}/faction/join`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -935,7 +935,13 @@ if (data.faction !== undefined) {
             listDiv.appendChild(btn);
             listDiv.appendChild(joinBtn);
           } else {
-            btn.onclick = () => claimHashtag(tag);
+            btn.onclick = () => {
+  if (!currentPlayer.nickname) {
+    updateInfo('Сначала задайте ник');
+    return;
+  }
+  claimHashtag(tag);
+};
             listDiv.appendChild(btn);
           }
         });
@@ -1121,12 +1127,17 @@ for (let y = startY; y < endY; y++) {
           }
         }
       }
-      if (currentPlayer.id && currentPlayer.nickname && (currentPlayer.hashtag || currentPlayer.faction)) {
+            // Меню доступно всегда, даже без ника
+      if (currentPlayer.id) {
         menuBtn.style.display = 'block';
+      } else {
+        menuBtn.style.display = 'none';
+      }
+      // Остальные кнопки только после полной инициализации
+      if (currentPlayer.id && currentPlayer.nickname && (currentPlayer.hashtag || currentPlayer.faction)) {
         factionBtn.style.display = 'block';
         chatToggleBtn.style.display = 'block';
       } else {
-        menuBtn.style.display = 'none';
         factionBtn.style.display = 'none';
         chatToggleBtn.style.display = 'none';
       }
