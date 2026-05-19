@@ -385,12 +385,13 @@ html += '<button id="donateBtn">Передать</button></p>';
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentPlayer.id, baseHashtag: res.baseHashtag, minorTag: tag })
       }).then(r => r.json());
-      if (resp.success) {
-        currentPlayer.hashtag = resp.minorTag;
-        currentPlayer.likes = resp.player.likes;
-        applyServerResponse(resp, null);
-        factionPanel.style.display = 'none';
-      } else alert(resp.error);
+        if (resp.success) {
+  currentPlayer.hashtag = resp.minorTag;
+  currentPlayer.likes = resp.player.likes;
+  currentPlayer.faction = res.baseHashtag;
+  applyServerResponse(resp, null);
+  factionPanel.style.display = 'none';
+} else alert(resp.error);
     });
   });
   const releaseMinorBtnLocal = document.getElementById('releaseMinorBtn');
@@ -449,6 +450,7 @@ document.getElementById('closeFactionBtn').addEventListener('click', () => {
 
  function updateAdjacentSet() {
   adjacentSet.clear();
+  console.log('updateAdjacentSet: faction =', currentPlayer.faction, 'hashtag =', currentPlayer.hashtag);
   if (!currentPlayer.id || !currentPlayer.hashtag) return;
   for (let y = 0; y < MAP_H; y++) {
     for (let x = 0; x < MAP_W; x++) {
