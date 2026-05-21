@@ -884,8 +884,8 @@ if (data.faction !== undefined) {
     if (data.worldW) MAP_W = data.worldW;
     if (data.worldH) MAP_H = data.worldH;
     updateAdjacentSet();
-    drawMap();
-  })
+    setTimeout(() => drawMap(), 0);
+})
   .catch(err => console.error('Ошибка обновления:', err));
 }
 
@@ -1047,8 +1047,8 @@ for (let y = startY; y < endY; y++) {
         });
       }
       const drawnOwners = new Set();
-      for (let y = 0; y < MAP_H; y++) {
-        for (let x = 0; x < MAP_W; x++) {
+      for (let y = startY; y < endY; y++) {
+       for (let x = startX; x < endX; x++) {
           const owner = map[y][x].ownerId;
           if (!owner || drawnOwners.has(owner)) continue;
           drawnOwners.add(owner);
@@ -1078,8 +1078,8 @@ for (let y = startY; y < endY; y++) {
       }
       ctx.textAlign = 'start';
       // Штриховка и пунктир для подчинённых
-      for (let y = 0; y < MAP_H; y++) {
-        for (let x = 0; x < MAP_W; x++) {
+      for (let y = startY; y < endY; y++) {
+       for (let x = startX; x < endX; x++) {
           const cell = map[y][x];
           if (cell.ownerId) {
             const owner = playersInfo[cell.ownerId];
@@ -1278,8 +1278,11 @@ for (let y = startY; y < endY; y++) {
     if (data.map) map = data.map;
     if (data.worldW) MAP_W = data.worldW;
     if (data.worldH) MAP_H = data.worldH;
-    drawMap();
-    updateInfo(`Лайков: ${currentPlayer.likes}`);
+    // Даём браузеру отрисовать интерфейс перед тяжёлой работой
+    setTimeout(() => {
+        drawMap();
+        updateInfo(`Лайков: ${currentPlayer.likes}`);
+    }, 50);
 });
         if (!currentPlayer.hashtag && !spectating) {
           const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
