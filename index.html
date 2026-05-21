@@ -820,7 +820,6 @@ if (data.faction !== undefined) {
 
       if (capturedCells?.length) animateCapture(capturedCells, data.map);
       else {
-        if (isValidMap(data.map)) map = data.map;
         updateAdjacentSet();
         drawMap();
         updateInfo(`Лайков: ${currentPlayer.likes}`);
@@ -866,20 +865,28 @@ if (data.faction !== undefined) {
 }
 
     function fetchState() {
-  if (!currentPlayer.id) return Promise.resolve();
-  return fetch(`${SERVER_URL}/state`, {
+  if (!currentPlayer.id) return;
+  fetch(`${SERVER_URL}/state`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ userId: currentPlayer.id })
   })
   .then(r => r.json())
+  .then(data => applyServerResponse(data, null))
+  .then(() => fetch(`${SERVER_URL}/map`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId: currentPlayer.id })
+  }))
+  .then(r => r.json())
   .then(data => {
-    applyServerResponse(data, null);
-    // Обновляем глобальные переменные для окна выбора
-    if (data.playersInfo) playersInfo = data.playersInfo;
-    if (data.hashtagLikes) hashtagLikes = data.hashtagLikes;
-    return data;
-  });
+    if (isValidMap(data.map)) map = data.map;
+    if (data.worldW) MAP_W = data.worldW;
+    if (data.worldH) MAP_H = data.worldH;
+    updateAdjacentSet();
+    drawMap();
+  })
+  .catch(err => console.error('Ошибка обновления:', err));
 }
 
     function spectate() {
@@ -1261,6 +1268,19 @@ for (let y = startY; y < endY; y++) {
           updateInfo('Игра завершена');
         }
         applyServerResponse(state, null);
+        fetch(`${SERVER_URL}/map`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId: currentPlayer.id })
+})
+.then(r => r.json())
+.then(data => {
+    if (data.map) map = data.map;
+    if (data.worldW) MAP_W = data.worldW;
+    if (data.worldH) MAP_H = data.worldH;
+    drawMap();
+    updateInfo(`Лайков: ${currentPlayer.likes}`);
+});
         if (!currentPlayer.hashtag && !spectating) {
           const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
           showSelection(AVAILABLE_HASHTAGS, taken);
