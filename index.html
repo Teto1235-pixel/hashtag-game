@@ -1326,6 +1326,7 @@ function startGame() {
           if (!timerInterval) timerInterval = setInterval(updateTimer, 1000);
         }
         currentPlayer.color = state.player?.color || '#cccccc';
+        currentPlayer.faction = state.faction;   // ← сохраняем фракцию
 
         // Если у игрока уже есть хештег – сразу стартуем игру
         if (currentPlayer.hashtag) {
