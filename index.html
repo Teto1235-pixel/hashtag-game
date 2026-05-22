@@ -392,6 +392,7 @@ html += '<button id="donateBtn">Передать</button></p>';
   currentPlayer.faction = res.baseHashtag;
   applyServerResponse(resp, null);
   factionPanel.style.display = 'none';
+  startGame();
 } else alert(resp.error);
     });
   });
@@ -856,6 +857,7 @@ if (data.faction !== undefined) {
           spectating = false;
           applyServerResponse(res, null);
           hideSelection();
+          startGame();
         } else alert(res.error);
       });
     }
@@ -918,6 +920,7 @@ if (data.faction !== undefined) {
         spectating = true;
         gameoverDiv.style.display = 'none';
         hideSelection();
+        startGame();
         updateInfo('Режим наблюдателя');
         drawMap();
       });
@@ -1246,6 +1249,38 @@ for (let y = startY; y < endY; y++) {
   step();
 }
 
+function startGame() {
+    if (window.stateInterval) return; // уже запущена
+  // загружаем карту и состояние
+  fetch(`${SERVER_URL}/map`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId: currentPlayer.id })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.map) map = data.map;
+    if (data.worldW) MAP_W = data.worldW;
+    if (data.worldH) MAP_H = data.worldH;
+    rebuildTerritoryCache();
+    updateAdjacentSet();
+    drawMap();
+    updateInfo(`Лайков: ${currentPlayer.likes}`);
+    resizeCanvas();
+    // запускаем периодическое обновление
+    window.stateInterval = setInterval(fetchState, 10000);
+    window.chatInterval = setInterval(fetchChatMessages, 3000);
+    window.addEventListener('beforeunload', () => {
+      clearInterval(window.stateInterval);
+      clearInterval(window.chatInterval);
+    });
+    fetchChatMessages();
+  })
+  .catch(err => {
+    updateInfo('⚠️ Ошибка загрузки мира: ' + err.message);
+  });
+}
+
     // ---------- ИНИЦИАЛИЗАЦИЯ ----------
     vkBridge.send('VKWebAppInit')
       .then(() => vkBridge.send('VKWebAppGetUserInfo'))
@@ -1262,11 +1297,11 @@ for (let y = startY; y < endY; y++) {
         if (!r.ok) throw new Error(`Ошибка сервера: ${r.status}`);
         return r.json();
       })
-      .then(state => {
-        currentPlayer.color = state.player?.color || '#cccccc';
+            .then(state => {
+        // всегда запоминаем базовые данные
         if (state.player) {
-          currentPlayer.spawnX = state.player.spawnX;
-          currentPlayer.spawnY = state.player.spawnY;
+          currentPlayer.likes = state.player.likes;
+          currentPlayer.hashtag = state.player.hashtag || null;
           if (state.player.nickname) {
             currentPlayer.nickname = state.player.nickname;
             document.getElementById('nicknameInput').style.display = 'none';
@@ -1274,51 +1309,33 @@ for (let y = startY; y < endY; y++) {
             document.getElementById('nicknameDisplay').textContent = 'Ник: ' + state.player.nickname;
             document.getElementById('nicknameDisplay').style.display = 'inline';
           }
+          if (state.player.spawnX !== undefined) {
+            currentPlayer.spawnX = state.player.spawnX;
+            currentPlayer.spawnY = state.player.spawnY;
+          }
         }
-        MAP_W = state.worldW || MAP_W;
-        MAP_H = state.worldH || MAP_H;
-        leaderboard = state.leaderboard || [];
-        hashtagLikes = state.hashtagLikes || {};
-        gameEndTime = state.gameEndTime;
-        gameOver = state.gameOver || false;
-        if (gameEndTime) {
+        if (state.playersInfo) playersInfo = state.playersInfo;
+        if (state.leaderboard) leaderboard = state.leaderboard;
+        if (state.hashtagLikes) hashtagLikes = state.hashtagLikes;
+        if (state.worldW) MAP_W = state.worldW;
+        if (state.worldH) MAP_H = state.worldH;
+        if (state.gameEndTime) {
+          gameEndTime = state.gameEndTime;
+          gameOver = state.gameOver || false;
           updateTimer();
-          timerInterval = setInterval(updateTimer, 1000);
+          if (!timerInterval) timerInterval = setInterval(updateTimer, 1000);
         }
-        if (gameOver) {
-          saveBtnDiv.style.display = 'block';
-          updateInfo('Игра завершена');
-        }
-        applyServerResponse(state, null);
-        fetch(`${SERVER_URL}/map`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId: currentPlayer.id })
-})
-.then(r => r.json())
-.then(data => {
-    if (data.map) map = data.map;
-    if (data.worldW) MAP_W = data.worldW;
-    if (data.worldH) MAP_H = data.worldH;
-        rebuildTerritoryCache();
-    // Даём браузеру отрисовать интерфейс перед тяжёлой работой
-    setTimeout(() => {
-        drawMap();
-        updateInfo(`Лайков: ${currentPlayer.likes}`);
-    }, 50);
-});
-        if (!currentPlayer.hashtag && !spectating) {
+        currentPlayer.color = state.player?.color || '#cccccc';
+
+        // Если у игрока уже есть хештег – сразу стартуем игру
+        if (currentPlayer.hashtag) {
+          startGame();
+        } else {
+          // Показываем меню выбора (без карты)
           const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
           showSelection(AVAILABLE_HASHTAGS, taken);
+          updateInfo('Выберите хештег и ник');
         }
-        resizeCanvas();
-        window.stateInterval = setInterval(fetchState, 10000);
-        window.chatInterval = setInterval(fetchChatMessages, 3000); 
-        window.addEventListener('beforeunload', () => {
-          clearInterval(window.stateInterval);
-          clearInterval(window.chatInterval);
-        });
-        fetchChatMessages();
       })
       .catch(err => {
         updateInfo('⚠️ Нет связи с сервером: ' + err.message);
