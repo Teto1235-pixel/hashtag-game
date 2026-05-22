@@ -161,6 +161,7 @@
     let pendingMap = null; 
     let hashtagLikes = {};
     let territoryBoundsCache = {};
+    let myCells = []; // кеш координат своих клеток
 
     let viewX = 0, viewY = 0;
     let zoom = 1;
@@ -452,24 +453,29 @@ document.getElementById('closeFactionBtn').addEventListener('click', () => {
 
  function updateAdjacentSet() {
   adjacentSet.clear();
-  //console.log('updateAdjacentSet: faction =', currentPlayer.faction, 'hashtag =', currentPlayer.hashtag);
   if (!currentPlayer.id || !currentPlayer.hashtag) return;
-  for (let y = 0; y < MAP_H; y++) {
-    for (let x = 0; x < MAP_W; x++) {
-      const cell = map[y][x];
-      if (cell.ownerId === currentPlayer.id) continue;
-      // не подсвечиваем клетки союзников
-      if (cell.ownerId && playersInfo[cell.ownerId]?.faction === currentPlayer.faction) continue;
-      for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
-        const nx = x + dx, ny = y + dy;
-        if (nx >= 0 && nx < MAP_W && ny >= 0 && ny < MAP_H &&
-    (map[ny][nx].ownerId === currentPlayer.id ||
-     (AVAILABLE_HASHTAGS.includes(currentPlayer.hashtag) &&
-      playersInfo[map[ny][nx].ownerId]?.faction === currentPlayer.faction))) {
-          adjacentSet.add(`${x},${y}`);
-          break;
+
+  // Собираем свои клетки (только если кеш пуст – он будет обновляться при rebuildTerritoryCache)
+  if (!myCells.length) {
+    for (let y = 0; y < MAP_H; y++) {
+      for (let x = 0; x < MAP_W; x++) {
+        if (map[y][x].ownerId === currentPlayer.id) {
+          myCells.push({x, y});
         }
       }
+    }
+  }
+
+  const dirs = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+  for (const {x, y} of myCells) {
+    for (const [dx, dy] of dirs) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || nx >= MAP_W || ny < 0 || ny >= MAP_H) continue;
+      const cell = map[ny][nx];
+      if (cell.ownerId === currentPlayer.id) continue;
+      // Не подсвечиваем союзников
+      if (cell.ownerId && playersInfo[cell.ownerId]?.faction === currentPlayer.faction) continue;
+      adjacentSet.add(`${nx},${ny}`);
     }
   }
 }
@@ -503,6 +509,15 @@ document.getElementById('closeFactionBtn').addEventListener('click', () => {
         if (x > b.maxX) b.maxX = x;
         if (y > b.maxY) b.maxY = y;
         b.count++;
+      }
+    }
+  }
+  // пересобираем кеш своих клеток
+  myCells = [];
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      if (map[y][x].ownerId === currentPlayer.id) {
+        myCells.push({x, y});
       }
     }
   }
@@ -1250,7 +1265,11 @@ for (let y = startY; y < endY; y++) {
 }
 
 function startGame() {
-    if (window.stateInterval) return; // уже запущена
+  if (window.stateInterval) return; // уже запущена
+
+  // Сразу делаем canvas нужного размера
+  resizeCanvas();
+
   // загружаем карту и состояние
   fetch(`${SERVER_URL}/map`, {
     method: 'POST',
@@ -1266,7 +1285,6 @@ function startGame() {
     updateAdjacentSet();
     drawMap();
     updateInfo(`Лайков: ${currentPlayer.likes}`);
-    resizeCanvas();
     // запускаем периодическое обновление
     window.stateInterval = setInterval(fetchState, 10000);
     window.chatInterval = setInterval(fetchChatMessages, 3000);
