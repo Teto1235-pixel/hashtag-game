@@ -1070,9 +1070,24 @@ if (data.faction !== undefined) {
       ctx.translate(-viewX, -viewY);
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, MAP_W * CELL_SIZE, MAP_H * CELL_SIZE);
-        // Копируем оффскрин (фон + сетка)
-      if (offscreen) {
+            // Вне анимации используем оффскрин, во время анимации рисуем клетки напрямую
+      if (!animating && offscreen) {
         ctx.drawImage(offscreen, 0, 0);
+      } else {
+        // Рисуем клетки из map (только видимую область)
+        for (let y = startY; y < endY; y++) {
+          for (let x = startX; x < endX; x++) {
+            const cell = map[y][x];
+            if (cell.ownerId) {
+              const info = playersInfo[cell.ownerId];
+              ctx.fillStyle = info ? info.color : '#cccccc';
+              ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            } else if (cell.hashtag) {
+              ctx.fillStyle = '#b0b0b0';
+              ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            }
+          }
+        }
       }
       const startX = Math.max(0, Math.floor(viewX / CELL_SIZE));
 const startY = Math.max(0, Math.floor(viewY / CELL_SIZE));
@@ -1272,7 +1287,14 @@ const endY = Math.min(
 }
 
 function startGame() {
-  if (window.stateInterval) return; // уже запущена
+    if (window.stateInterval) {
+    // уже запущена – просто обновим карту и кеши
+    rebuildOffscreen();
+    rebuildTerritoryCache();
+    updateAdjacentSet();
+    drawMap();
+    return;
+  }
 
   // Сразу делаем canvas нужного размера
   resizeCanvas();
