@@ -161,6 +161,10 @@
     let pendingMap = null; 
     let hashtagLikes = {};
     let territoryBoundsCache = {};
+    // Оффскрин-канвас для кеширования карты
+let offscreen = null;
+let offCtx = null;
+let offscreenDirty = true;   // true = нужно полностью перерисовать
     let myCells = []; // кеш координат своих клеток
 
     let viewX = 0, viewY = 0;
@@ -521,6 +525,51 @@ document.getElementById('closeFactionBtn').addEventListener('click', () => {
       }
     }
   }
+}
+
+function rebuildOffscreen() {
+  if (!offscreen || !offCtx) {
+    offscreen = document.createElement('canvas');
+    offscreen.width = MAP_W * CELL_SIZE;
+    offscreen.height = MAP_H * CELL_SIZE;
+    offCtx = offscreen.getContext('2d');
+  }
+  // Фон
+  offCtx.fillStyle = '#ffffff';
+  offCtx.fillRect(0, 0, MAP_W * CELL_SIZE, MAP_H * CELL_SIZE);
+
+  // Все клетки
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      const cell = map[y][x];
+      if (cell.ownerId) {
+        const info = playersInfo[cell.ownerId];
+        offCtx.fillStyle = info ? info.color : '#cccccc';
+        offCtx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+      } else if (cell.hashtag) {
+        offCtx.fillStyle = '#b0b0b0';
+        offCtx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+      }
+    }
+  }
+
+  // Сетка
+  offCtx.strokeStyle = '#e0e0e0';
+  offCtx.lineWidth = 0.3;
+  for (let i = 0; i <= MAP_H; i++) {
+    offCtx.beginPath();
+    offCtx.moveTo(0, i * CELL_SIZE);
+    offCtx.lineTo(MAP_W * CELL_SIZE, i * CELL_SIZE);
+    offCtx.stroke();
+  }
+  for (let i = 0; i <= MAP_W; i++) {
+    offCtx.beginPath();
+    offCtx.moveTo(i * CELL_SIZE, 0);
+    offCtx.lineTo(i * CELL_SIZE, MAP_H * CELL_SIZE);
+    offCtx.stroke();
+  }
+
+  offscreenDirty = false;
 }
 
     function findClosestOwnCell(worldX, worldY) {
@@ -919,6 +968,7 @@ if (data.faction !== undefined) {
   .then(r => r.json())
   .then(data => {
     if (isValidMap(data.map)) map = data.map;
+      rebuildOffscreen();
     if (data.worldW) MAP_W = data.worldW;
     if (data.worldH) MAP_H = data.worldH;
         rebuildTerritoryCache();
@@ -1030,6 +1080,10 @@ if (data.faction !== undefined) {
       ctx.translate(-viewX, -viewY);
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, MAP_W * CELL_SIZE, MAP_H * CELL_SIZE);
+        // Копируем оффскрин (фон + сетка)
+      if (offscreen) {
+        ctx.drawImage(offscreen, 0, 0);
+      }
       const startX = Math.max(0, Math.floor(viewX / CELL_SIZE));
 const startY = Math.max(0, Math.floor(viewY / CELL_SIZE));
 const endX = Math.min(
@@ -1041,43 +1095,6 @@ const endY = Math.min(
   startY + Math.ceil(canvas.height / (CELL_SIZE * zoom)) + 2
 );
 
-for (let y = startY; y < endY; y++) {
-  for (let x = startX; x < endX; x++) {
-          const cell = map[y][x];
-          if (cell.ownerId) {
-            const info = playersInfo[cell.ownerId];
-            ctx.fillStyle = info ? info.color : '#cccccc';
-            ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-          } else if (cell.hashtag) {
-            ctx.fillStyle = '#b0b0b0';
-            ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-            ctx.fillStyle = 'white';
-            ctx.shadowColor = 'black';
-            ctx.shadowBlur = 2;
-            ctx.font = `bold ${Math.max(5, CELL_SIZE * 0.6)}px "Courier New", monospace`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(cell.hashtag, x * CELL_SIZE + CELL_SIZE/2, y * CELL_SIZE + CELL_SIZE/2);
-            ctx.shadowColor = 'transparent';
-            ctx.shadowBlur = 0;
-            ctx.textAlign = 'start';
-          }
-        }
-      }
-      ctx.strokeStyle = '#e0e0e0';
-      ctx.lineWidth = 0.3 / zoom;
-      for (let i = startY; i <= endY; i++) {
-  ctx.beginPath();
-  ctx.moveTo(startX * CELL_SIZE, i * CELL_SIZE);
-  ctx.lineTo(endX * CELL_SIZE, i * CELL_SIZE);
-  ctx.stroke();
-}
-      for (let i = startX; i <= endX; i++) {
-  ctx.beginPath();
-  ctx.moveTo(i * CELL_SIZE, startY * CELL_SIZE);
-  ctx.lineTo(i * CELL_SIZE, endY * CELL_SIZE);
-  ctx.stroke();
-}
       if (!animating && currentPlayer.id && currentPlayer.hashtag && adjacentSet.size) {
         ctx.strokeStyle = '#FFD700';
         ctx.lineWidth = 1.5 / zoom;
@@ -1235,7 +1252,7 @@ for (let y = startY; y < endY; y++) {
 
         map = pendingMap;
         pendingMap = null;
-
+        rebuildOffscreen();
         animating = false;
 
         updateAdjacentSet();
@@ -1281,6 +1298,7 @@ function startGame() {
     if (data.map) map = data.map;
     if (data.worldW) MAP_W = data.worldW;
     if (data.worldH) MAP_H = data.worldH;
+    rebuildOffscreen();   // ← полная перерисовка фона
     rebuildTerritoryCache();
     updateAdjacentSet();
     drawMap();
