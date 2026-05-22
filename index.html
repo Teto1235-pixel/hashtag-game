@@ -430,8 +430,9 @@ if (donateBtn) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: currentPlayer.id, targetUserId: target, amount })
     }).then(r => r.json());
-    if (resp.success) {
-      factionBtn.click(); // обновить панель
+     if (resp.success) {
+      factionBtn.click();        // переоткрыть панель
+      fetchState();              // сразу обновить состояние (баланс)
     } else updateInfo(resp.error);
   });
 }
@@ -516,12 +517,17 @@ document.getElementById('closeFactionBtn').addEventListener('click', () => {
       }
     }
   }
-  // пересобираем кеш своих клеток
+  // пересобираем кеш своих клеток (с учётом транзита для командира)
   myCells = [];
+  const isCommander = currentPlayer.hashtag && AVAILABLE_HASHTAGS.includes(currentPlayer.hashtag);
   for (let y = 0; y < MAP_H; y++) {
     for (let x = 0; x < MAP_W; x++) {
-      if (map[y][x].ownerId === currentPlayer.id) {
+      const owner = map[y][x].ownerId;
+      if (!owner) continue;
+      if (owner === currentPlayer.id) {
         myCells.push({x, y});
+      } else if (isCommander && playersInfo[owner]?.faction === currentPlayer.faction) {
+        myCells.push({x, y});   // добавляем клетки подчинённых
       }
     }
   }
@@ -551,22 +557,6 @@ function rebuildOffscreen() {
         offCtx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
       }
     }
-  }
-
-  // Сетка
-  offCtx.strokeStyle = '#e0e0e0';
-  offCtx.lineWidth = 0.3;
-  for (let i = 0; i <= MAP_H; i++) {
-    offCtx.beginPath();
-    offCtx.moveTo(0, i * CELL_SIZE);
-    offCtx.lineTo(MAP_W * CELL_SIZE, i * CELL_SIZE);
-    offCtx.stroke();
-  }
-  for (let i = 0; i <= MAP_W; i++) {
-    offCtx.beginPath();
-    offCtx.moveTo(i * CELL_SIZE, 0);
-    offCtx.lineTo(i * CELL_SIZE, MAP_H * CELL_SIZE);
-    offCtx.stroke();
   }
 
   offscreenDirty = false;
