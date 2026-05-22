@@ -160,6 +160,7 @@
     let animationTimer = null;
     let pendingMap = null; 
     let hashtagLikes = {};
+    let territoryBoundsCache = {};
 
     let viewX = 0, viewY = 0;
     let zoom = 1;
@@ -450,7 +451,7 @@ document.getElementById('closeFactionBtn').addEventListener('click', () => {
 
  function updateAdjacentSet() {
   adjacentSet.clear();
-  console.log('updateAdjacentSet: faction =', currentPlayer.faction, 'hashtag =', currentPlayer.hashtag);
+  //console.log('updateAdjacentSet: faction =', currentPlayer.faction, 'hashtag =', currentPlayer.hashtag);
   if (!currentPlayer.id || !currentPlayer.hashtag) return;
   for (let y = 0; y < MAP_H; y++) {
     for (let x = 0; x < MAP_W; x++) {
@@ -485,6 +486,26 @@ document.getElementById('closeFactionBtn').addEventListener('click', () => {
       }
       return { minX, minY, maxX, maxY, count, width: maxX-minX+1, height: maxY-minY+1 };
     }
+
+    function rebuildTerritoryCache() {
+  territoryBoundsCache = {};
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      const owner = map[y][x].ownerId;
+      if (!owner) continue;
+      const b = territoryBoundsCache[owner];
+      if (!b) {
+        territoryBoundsCache[owner] = { minX: x, minY: y, maxX: x, maxY: y, count: 1 };
+      } else {
+        if (x < b.minX) b.minX = x;
+        if (y < b.minY) b.minY = y;
+        if (x > b.maxX) b.maxX = x;
+        if (y > b.maxY) b.maxY = y;
+        b.count++;
+      }
+    }
+  }
+}
 
     function findClosestOwnCell(worldX, worldY) {
       if (!currentPlayer.id || !currentPlayer.hashtag) return null;
@@ -883,6 +904,7 @@ if (data.faction !== undefined) {
     if (isValidMap(data.map)) map = data.map;
     if (data.worldW) MAP_W = data.worldW;
     if (data.worldH) MAP_H = data.worldH;
+        rebuildTerritoryCache();
     updateAdjacentSet();
     setTimeout(() => drawMap(), 0);
 })
@@ -1052,7 +1074,7 @@ for (let y = startY; y < endY; y++) {
           const owner = map[y][x].ownerId;
           if (!owner || drawnOwners.has(owner)) continue;
           drawnOwners.add(owner);
-          const bounds = getTerritoryBounds(owner);
+          const bounds = territoryBoundsCache[owner];
           if (bounds.count === 0) continue;
           const info = playersInfo[owner];
           if (!info) continue;
@@ -1278,6 +1300,7 @@ for (let y = startY; y < endY; y++) {
     if (data.map) map = data.map;
     if (data.worldW) MAP_W = data.worldW;
     if (data.worldH) MAP_H = data.worldH;
+        rebuildTerritoryCache();
     // Даём браузеру отрисовать интерфейс перед тяжёлой работой
     setTimeout(() => {
         drawMap();
