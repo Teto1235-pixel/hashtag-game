@@ -547,12 +547,16 @@ document.getElementById('closeFactionBtn').addEventListener('click', () => {
 }
 
 function rebuildOffscreen() {
-  if (!offscreen || !offCtx) {
+  // Защита: если карта невалидна или размеры не совпадают – просто выходим
+  if (!map || map.length !== MAP_H || !map[0] || map[0].length !== MAP_W) return;
+
+  if (!offscreen || !offCtx || offscreen.width !== MAP_W * CELL_SIZE || offscreen.height !== MAP_H * CELL_SIZE) {
     offscreen = document.createElement('canvas');
     offscreen.width = MAP_W * CELL_SIZE;
     offscreen.height = MAP_H * CELL_SIZE;
     offCtx = offscreen.getContext('2d');
   }
+
   // Фон
   offCtx.fillStyle = '#ffffff';
   offCtx.fillRect(0, 0, MAP_W * CELL_SIZE, MAP_H * CELL_SIZE);
