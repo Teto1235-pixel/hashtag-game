@@ -972,12 +972,12 @@ if (data.faction !== undefined) {
   .then(r => r.json())
   .then(data => {
     if (isValidMap(data.map)) map = data.map;
-      rebuildOffscreen();
     if (data.worldW) MAP_W = data.worldW;
     if (data.worldH) MAP_H = data.worldH;
-        rebuildTerritoryCache();
+    rebuildOffscreen();
+    rebuildTerritoryCache();
     updateAdjacentSet();
-    setTimeout(() => drawMap(), 0);
+    drawMap();
 })
   .catch(err => console.error('Ошибка обновления:', err));
 }
@@ -1341,9 +1341,9 @@ function startGame() {
   })
   .then(r => r.json())
   .then(data => {
+    if (data.map) map = data.map;
     if (data.worldW) MAP_W = data.worldW;
     if (data.worldH) MAP_H = data.worldH;
-    if (data.map) map = data.map;
 
     if (!offscreen || offscreen.width !== MAP_W * CELL_SIZE || offscreen.height !== MAP_H * CELL_SIZE) {
       offscreen = document.createElement('canvas');
