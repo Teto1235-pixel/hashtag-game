@@ -1278,6 +1278,7 @@ const endY = Math.min(
       pendingMap = null;
       rebuildOffscreen();
       animating = false;
+      rebuildTerritoryCache();
       updateAdjacentSet();
       drawMap();
       updateInfo(`Лайков: ${currentPlayer.likes}`);
