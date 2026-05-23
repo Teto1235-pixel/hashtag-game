@@ -129,6 +129,11 @@
 
   <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
   <script>
+    window.addEventListener('error', function (event) {
+  updateInfo('Ошибка в строке ' + event.lineno + ': ' + event.message);
+  // если нужно посмотреть полный стек в консоли:
+  console.error(event.error);
+});
     // ---------- НАСТРОЙКИ ----------
     const CELL_SIZE = 8;
     let MAP_W = 320;
