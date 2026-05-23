@@ -1079,8 +1079,19 @@ if (data.faction !== undefined) {
       ctx.translate(-viewX, -viewY);
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, MAP_W * CELL_SIZE, MAP_H * CELL_SIZE);
+
+      const startX = Math.max(0, Math.floor(viewX / CELL_SIZE));
+const startY = Math.max(0, Math.floor(viewY / CELL_SIZE));
+const endX = Math.min(
+  MAP_W,
+  startX + Math.ceil(canvas.width / (CELL_SIZE * zoom)) + 2
+);
+const endY = Math.min(
+  MAP_H,
+  startY + Math.ceil(canvas.height / (CELL_SIZE * zoom)) + 2
+);
             // Вне анимации используем оффскрин, во время анимации рисуем клетки напрямую
-      if (!animating && typeof offscreen !== 'undefined' && offscreen) {
+      if (!animating && offscreen) {
         ctx.drawImage(offscreen, 0, 0);
       } else {
         // Рисуем клетки из map (только видимую область)
@@ -1098,16 +1109,7 @@ if (data.faction !== undefined) {
           }
         }
       }
-      const startX = Math.max(0, Math.floor(viewX / CELL_SIZE));
-const startY = Math.max(0, Math.floor(viewY / CELL_SIZE));
-const endX = Math.min(
-  MAP_W,
-  startX + Math.ceil(canvas.width / (CELL_SIZE * zoom)) + 2
-);
-const endY = Math.min(
-  MAP_H,
-  startY + Math.ceil(canvas.height / (CELL_SIZE * zoom)) + 2
-);
+      
 
       if (!animating && currentPlayer.id && currentPlayer.hashtag && adjacentSet.size) {
         ctx.strokeStyle = '#FFD700';
