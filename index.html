@@ -1299,7 +1299,7 @@ function startGame() {
     drawMap();
     return;
   }
-
+  updateInfo('Загрузка мира...');
   // Сразу делаем canvas нужного размера
   resizeCanvas();
 
@@ -1311,21 +1311,33 @@ function startGame() {
   })
   .then(r => r.json())
   .then(data => {
-    if (data.map) map = data.map;
+    // Сначала обновляем размеры мира
     if (data.worldW) MAP_W = data.worldW;
     if (data.worldH) MAP_H = data.worldH;
-    rebuildOffscreen();   // ← полная перерисовка фона
+    if (data.map) map = data.map;
+
+    // Теперь создаём или пересоздаём оффскрин с новыми размерами
+    if (!offscreen || offscreen.width !== MAP_W * CELL_SIZE || offscreen.height !== MAP_H * CELL_SIZE) {
+      offscreen = document.createElement('canvas');
+      offscreen.width = MAP_W * CELL_SIZE;
+      offscreen.height = MAP_H * CELL_SIZE;
+      offCtx = offscreen.getContext('2d');
+    }
+    rebuildOffscreen();
     rebuildTerritoryCache();
     updateAdjacentSet();
     drawMap();
     updateInfo(`Лайков: ${currentPlayer.likes}`);
-    // запускаем периодическое обновление
-    window.stateInterval = setInterval(fetchState, 10000);
-    window.chatInterval = setInterval(fetchChatMessages, 3000);
-    window.addEventListener('beforeunload', () => {
-      clearInterval(window.stateInterval);
-      clearInterval(window.chatInterval);
-    });
+
+    // запускаем периодическое обновление, если ещё не запущено
+    if (!window.stateInterval) {
+      window.stateInterval = setInterval(fetchState, 10000);
+      window.chatInterval = setInterval(fetchChatMessages, 3000);
+      window.addEventListener('beforeunload', () => {
+        clearInterval(window.stateInterval);
+        clearInterval(window.chatInterval);
+      });
+    }
     fetchChatMessages();
   })
   .catch(err => {
