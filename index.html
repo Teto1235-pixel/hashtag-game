@@ -127,6 +127,13 @@
     <canvas id="gameCanvas"></canvas>
   </div>
 
+  <div id="loadingScreen" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.8); z-index:100; justify-content:center; align-items:center; flex-direction:column;">
+    <div style="color:white; font-size:24px; margin-bottom:20px;">Загрузка мира...</div>
+    <div style="width:300px; height:20px; background:#333; border-radius:10px; overflow:hidden;">
+      <div id="loadingBar" style="width:0%; height:100%; background:#4CAF50; border-radius:10px;"></div>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
   <script>
     window.addEventListener('error', function (event) {
@@ -402,6 +409,7 @@ html += '<button id="donateBtn">Передать</button></p>';
   currentPlayer.faction = res.baseHashtag;
   applyServerResponse(resp, null);
   factionPanel.style.display = 'none';
+  showLoadingScreen();
   startGame();
 } else alert(resp.error);
     });
@@ -915,8 +923,9 @@ if (data.faction !== undefined) {
           currentPlayer.spawnX = res.player.spawnX; currentPlayer.spawnY = res.player.spawnY;
           spectating = false;
           applyServerResponse(res, null);
-          hideSelection();
-          startGame();
+          hideSelection();   // сначала убираем меню
+          showLoadingScreen(); // потом показываем загрузку
+          startGame();        // запускаем загрузку мира
         } else alert(res.error);
       });
     }
@@ -1297,20 +1306,38 @@ const endY = Math.min(
   step();
 }
 
+function showLoadingScreen() {
+  document.getElementById('loadingScreen').style.display = 'flex';
+  document.getElementById('loadingBar').style.width = '0%';
+  let progress = 0;
+  window.loadingInterval = setInterval(() => {
+    progress += Math.random() * 15;
+    if (progress > 90) progress = 90;
+    document.getElementById('loadingBar').style.width = progress + '%';
+  }, 500);
+}
+
+function hideLoadingScreen() {
+  clearInterval(window.loadingInterval);
+  document.getElementById('loadingBar').style.width = '100%';
+  setTimeout(() => {
+    document.getElementById('loadingScreen').style.display = 'none';
+  }, 300);
+}
+
 function startGame() {
-    if (window.stateInterval) {
-    // уже запущена – просто обновим карту и кеши
+  if (window.stateInterval) {
     rebuildOffscreen();
     rebuildTerritoryCache();
     updateAdjacentSet();
     drawMap();
     return;
   }
-  updateInfo('Загрузка мира...');
-  // Сразу делаем canvas нужного размера
+
+  showLoadingScreen();   // ← показываем загрузку
+
   resizeCanvas();
 
-  // загружаем карту и состояние
   fetch(`${SERVER_URL}/map`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1318,12 +1345,10 @@ function startGame() {
   })
   .then(r => r.json())
   .then(data => {
-    // Сначала обновляем размеры мира
     if (data.worldW) MAP_W = data.worldW;
     if (data.worldH) MAP_H = data.worldH;
     if (data.map) map = data.map;
 
-    // Теперь создаём или пересоздаём оффскрин с новыми размерами
     if (!offscreen || offscreen.width !== MAP_W * CELL_SIZE || offscreen.height !== MAP_H * CELL_SIZE) {
       offscreen = document.createElement('canvas');
       offscreen.width = MAP_W * CELL_SIZE;
@@ -1333,10 +1358,10 @@ function startGame() {
     rebuildOffscreen();
     rebuildTerritoryCache();
     updateAdjacentSet();
+    hideLoadingScreen();   // ← скрываем загрузку
     drawMap();
     updateInfo(`Лайков: ${currentPlayer.likes}`);
 
-    // запускаем периодическое обновление, если ещё не запущено
     if (!window.stateInterval) {
       window.stateInterval = setInterval(fetchState, 10000);
       window.chatInterval = setInterval(fetchChatMessages, 3000);
@@ -1348,6 +1373,7 @@ function startGame() {
     fetchChatMessages();
   })
   .catch(err => {
+    hideLoadingScreen();
     updateInfo('⚠️ Ошибка загрузки мира: ' + err.message);
   });
 }
