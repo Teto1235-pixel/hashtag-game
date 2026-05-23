@@ -1255,55 +1255,50 @@ const endY = Math.min(
     function updateInfo(text) { document.getElementById('info').textContent = text; }
 
     function animateCapture(cells, serverMap) {
-     if (animationTimer) clearTimeout(animationTimer);
-     if (!cells.length) {
-       map = serverMap;
-       updateAdjacentSet();
-       drawMap();
-       updateInfo(`Лайков: ${currentPlayer.likes}`);
-       animating = false;
+  if (animationTimer) cancelAnimationFrame(animationTimer);
+  if (!cells.length) {
+    map = serverMap;
+    rebuildOffscreen();
+    updateAdjacentSet();
+    drawMap();
+    updateInfo(`Лайков: ${currentPlayer.likes}`);
+    animating = false;
+    return;
+  }
+
+  animating = true;
+  pendingMap = serverMap;
+  animationQueue = [...cells];
+
+  const BATCH_SIZE = 20; // клеток за кадр
+
+  function step() {
+    if (!animationQueue.length) {
+      map = pendingMap;
+      pendingMap = null;
+      rebuildOffscreen();
+      animating = false;
+      updateAdjacentSet();
+      drawMap();
+      updateInfo(`Лайков: ${currentPlayer.likes}`);
       return;
-     }
+    }
 
-     animating = true;
-
-     pendingMap = serverMap;
-
-     animationQueue = [...cells];
-
-     function step() {
-
-       if (!animationQueue.length) {
-
-        map = pendingMap;
-        pendingMap = null;
-        rebuildOffscreen();
-        animating = false;
-
-        updateAdjacentSet();
-
-        drawMap();
-
-        updateInfo(`Лайков: ${currentPlayer.likes}`);
-
-        return;
-      }
-
+    // обрабатываем до BATCH_SIZE клеток за один кадр
+    for (let i = 0; i < BATCH_SIZE && animationQueue.length > 0; i++) {
       const cell = animationQueue.shift();
-
       if (map[cell.y] && map[cell.y][cell.x]) {
-       map[cell.y][cell.x] = {
-        ownerId: currentPlayer.id,
-        hashtag: currentPlayer.hashtag
-       };
-     }
+        map[cell.y][cell.x] = {
+          ownerId: currentPlayer.id,
+          hashtag: currentPlayer.hashtag
+        };
+      }
+    }
+    drawMap();
+    animationTimer = requestAnimationFrame(step);
+  }
 
-     drawMap();
-
-     animationTimer = setTimeout(step, 60);
-   }
-
-  step();
+  animationTimer = requestAnimationFrame(step);
 }
 
 function showLoadingScreen() {
