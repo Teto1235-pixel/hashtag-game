@@ -917,8 +917,17 @@ if (data.faction !== undefined) {
         gameoverDiv.style.display = 'flex';
       }
 
-      if (capturedCells?.length) animateCapture(capturedCells, data.map);
-      else {
+      if (capturedCells?.length && data.map && Array.isArray(data.map)) {
+        animateCapture(capturedCells, data.map);
+      } else if (data.map && Array.isArray(data.map)) {
+        // карта пришла, но без захвата – просто обновляем
+        map = data.map;
+        rebuildOffscreen();
+        rebuildTerritoryCache();
+        updateAdjacentSet();
+        drawMap();
+        updateInfo(`Лайков: ${currentPlayer.likes}`);
+      } else {
         updateAdjacentSet();
         drawMap();
         updateInfo(`Лайков: ${currentPlayer.likes}`);
@@ -1266,6 +1275,10 @@ const endY = Math.min(
 
     function animateCapture(cells, serverMap) {
   if (animationTimer) cancelAnimationFrame(animationTimer);
+  if (!Array.isArray(serverMap)) {
+    animating = false;
+    return;
+  }
   if (!cells.length) {
     map = serverMap;
     rebuildOffscreen();
