@@ -48,7 +48,7 @@
   </style>
 </head>
 <body>
-  <div id="timer" style="position:absolute; top:10px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0); color:#000; padding:4px 16px; border-radius:20px; z-index:10; font-weight:bold;"></div>
+  <div id="timer" style="position:absolute; top:10px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0); color:#000; padding:4px 16px; border-radius:20px; z-index:10; font-weight:bold; text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;"></div>
   <div id="saveBtn" style="position:absolute; top:10px; right:10px; z-index:10; display:none;">
     <button id="saveMapBtn" style="background:#4CAF50; color:white; border:none; border-radius:4px; padding:8px 12px; cursor:pointer;">💾 Сохранить карту</button>
   </div>
@@ -85,7 +85,7 @@
   <button id="chooseHashtagBtn" style="display:none;">Выбрать хештег</button>
   <button id="closeMenuBtn">Закрыть</button>
 </div>
-
+ <div id="overlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3); z-index:19;"></div> 
   <div id="selection">
     <h3>Выберите хештег</h3>
     <div id="hashtagList"></div>
@@ -983,6 +983,8 @@ if (data.faction !== undefined) {
 
     let selectionRefreshInterval = null;
     function showSelection(hashtags, takenHashtags) {
+      document.getElementById('overlay').style.display = 'block';
+      document.getElementById('canvasContainer').style.pointerEvents = 'none';
       const listDiv = document.getElementById('hashtagList');
       const spectateBtn = document.getElementById('spectateBtn');
         function buildList(likesData) {
@@ -1054,6 +1056,8 @@ if (data.faction !== undefined) {
       selectionDiv.style.display = 'block';
     }
     function hideSelection() {
+      document.getElementById('overlay').style.display = 'none';
+      document.getElementById('canvasContainer').style.pointerEvents = '';
       if (selectionRefreshInterval) {
         clearInterval(selectionRefreshInterval);
         selectionRefreshInterval = null;
