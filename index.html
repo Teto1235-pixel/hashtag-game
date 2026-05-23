@@ -976,20 +976,14 @@ if (data.faction !== undefined) {
 
     function fetchState() {
   if (!currentPlayer.id) return;
-  fetch(`${SERVER_URL}/state`, {
+  fetch(`${SERVER_URL}/sync`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ userId: currentPlayer.id })
   })
   .then(r => r.json())
-  .then(data => applyServerResponse(data, null))
-  .then(() => fetch(`${SERVER_URL}/map`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId: currentPlayer.id })
-  }))
-  .then(r => r.json())
   .then(data => {
+    applyServerResponse(data, null);
     if (isValidMap(data.map)) map = data.map;
     if (data.worldW) MAP_W = data.worldW;
     if (data.worldH) MAP_H = data.worldH;
@@ -997,8 +991,8 @@ if (data.faction !== undefined) {
     rebuildTerritoryCache();
     updateAdjacentSet();
     drawMap();
-})
-  .catch(err => console.error('Ошибка обновления:', err));
+  })
+  .catch(err => console.error('Ошибка sync:', err));
 }
 
     function spectate() {
