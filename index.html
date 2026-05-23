@@ -167,8 +167,8 @@
     let hashtagLikes = {};
     let territoryBoundsCache = {};
     // Оффскрин-канвас для кеширования карты
-let offscreen = null;
-let offCtx = null;
+var offscreen = null;
+var offCtx = null;
 let offscreenDirty = true;   // true = нужно полностью перерисовать
     let myCells = []; // кеш координат своих клеток
 
@@ -1080,7 +1080,7 @@ if (data.faction !== undefined) {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, MAP_W * CELL_SIZE, MAP_H * CELL_SIZE);
             // Вне анимации используем оффскрин, во время анимации рисуем клетки напрямую
-      if (!animating && offscreen) {
+      if (!animating && typeof offscreen !== 'undefined' && offscreen) {
         ctx.drawImage(offscreen, 0, 0);
       } else {
         // Рисуем клетки из map (только видимую область)
