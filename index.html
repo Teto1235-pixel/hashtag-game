@@ -473,10 +473,11 @@ document.getElementById('closeFactionBtn').addEventListener('click', () => {
   adjacentSet.clear();
   if (!currentPlayer.id || !currentPlayer.hashtag) return;
 
-  // Собираем свои клетки (только если кеш пуст – он будет обновляться при rebuildTerritoryCache)
   if (!myCells.length) {
-    for (let y = 0; y < MAP_H; y++) {
-      for (let x = 0; x < MAP_W; x++) {
+    const safeH = Math.min(MAP_H, map.length);
+    const safeW = Math.min(MAP_W, map[0]?.length || 0);
+    for (let y = 0; y < safeH; y++) {
+      for (let x = 0; x < safeW; x++) {
         if (map[y][x].ownerId === currentPlayer.id) {
           myCells.push({x, y});
         }
@@ -514,8 +515,12 @@ document.getElementById('closeFactionBtn').addEventListener('click', () => {
 
     function rebuildTerritoryCache() {
   territoryBoundsCache = {};
-  for (let y = 0; y < MAP_H; y++) {
-    for (let x = 0; x < MAP_W; x++) {
+
+  const safeH = Math.min(MAP_H, map.length);
+  const safeW = Math.min(MAP_W, map[0]?.length || 0);
+
+  for (let y = 0; y < safeH; y++) {
+    for (let x = 0; x < safeW; x++) {
       const owner = map[y][x].ownerId;
       if (!owner) continue;
       const b = territoryBoundsCache[owner];
@@ -530,17 +535,18 @@ document.getElementById('closeFactionBtn').addEventListener('click', () => {
       }
     }
   }
-  // пересобираем кеш своих клеток (с учётом транзита для командира)
+
+  // пересобираем myCells
   myCells = [];
   const isCommander = currentPlayer.hashtag && AVAILABLE_HASHTAGS.includes(currentPlayer.hashtag);
-  for (let y = 0; y < MAP_H; y++) {
-    for (let x = 0; x < MAP_W; x++) {
+  for (let y = 0; y < safeH; y++) {
+    for (let x = 0; x < safeW; x++) {
       const owner = map[y][x].ownerId;
       if (!owner) continue;
       if (owner === currentPlayer.id) {
         myCells.push({x, y});
       } else if (isCommander && playersInfo[owner]?.faction === currentPlayer.faction) {
-        myCells.push({x, y});   // добавляем клетки подчинённых
+        myCells.push({x, y});
       }
     }
   }
