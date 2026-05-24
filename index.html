@@ -1414,7 +1414,7 @@ function startGame() {
     hideLoadingScreen();   // ← скрываем загрузку
     needsRedraw = true;
     updateInfo(`Лайков: ${currentPlayer.likes}`);
-
+    fetchState();
     if (!window.stateInterval) {
       window.stateInterval = setInterval(fetchState, 10000);
       window.chatInterval = setInterval(fetchChatMessages, 3000);
