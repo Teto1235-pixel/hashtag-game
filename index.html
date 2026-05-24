@@ -155,7 +155,7 @@
       canvas.width = container.clientWidth;
       canvas.height = container.clientHeight;
       clampCamera();
-      drawMap();
+      needsRedraw = true;
     }
     window.addEventListener('resize', resizeCanvas);
 
@@ -174,9 +174,9 @@
     let hashtagLikes = {};
     let territoryBoundsCache = {};
     // Оффскрин-канвас для кеширования карты
-var offscreen = null;
-var offCtx = null;
-let offscreenDirty = true;   // true = нужно полностью перерисовать
+    var offscreen = null;
+    var offCtx = null;
+    let offscreenDirty = true;   // true = нужно полностью перерисовать
     let myCells = []; // кеш координат своих клеток
 
     let viewX = 0, viewY = 0;
@@ -191,6 +191,8 @@ let offscreenDirty = true;   // true = нужно полностью перер�
     let timerInterval = null;
     let lastReadTimestamp = 0; // время последнего прочитанного сообщения
     let newestMessageTimestamp = 0;
+    let needsRedraw = true;      // флаг необходимости перерисовки
+    let renderLoopRunning = false;
 
     // UI
     const attackPanel = document.getElementById('attackPanel');
@@ -216,9 +218,9 @@ let offscreenDirty = true;   // true = нужно полностью перер�
     const saveBtnDiv = document.getElementById('saveBtn');
     const timerDiv = document.getElementById('timer');
     const factionBtn = document.getElementById('factionBtn');
-const factionPanel = document.getElementById('factionPanel');
-const factionTitle = document.getElementById('factionTitle');
-const factionContent = document.getElementById('factionContent');
+    const factionPanel = document.getElementById('factionPanel');
+    const factionTitle = document.getElementById('factionTitle');
+    const factionContent = document.getElementById('factionContent');
     let selectedTarget = null;
     let attackInProgress = false;
     let clickTarget = null;
@@ -227,6 +229,20 @@ const factionContent = document.getElementById('factionContent');
     canvas.addEventListener('gesturechange', e => e.preventDefault());
     canvas.addEventListener('gestureend', e => e.preventDefault());
     canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+
+  function startRenderLoop() {
+  if (renderLoopRunning) return;
+  renderLoopRunning = true;
+  function loop() {
+    if (needsRedraw) {
+      drawMap();
+      needsRedraw = false;
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+}
 
     // --- Функция обновления таймера ---
     function updateTimer() {
@@ -550,6 +566,19 @@ document.getElementById('closeFactionBtn').addEventListener('click', () => {
       }
     }
   }
+    // пересчитываем центр масс своей территории
+  if (myCells.length > 0) {
+    let sumX = 0, sumY = 0;
+    for (const cell of myCells) {
+      sumX += cell.x * CELL_SIZE + CELL_SIZE / 2;
+      sumY += cell.y * CELL_SIZE + CELL_SIZE / 2;
+    }
+    myCenterX = sumX / myCells.length;
+    myCenterY = sumY / myCells.length;
+  } else {
+    myCenterX = 0;
+    myCenterY = 0;
+  }
 }
 
 function rebuildOffscreen() {
@@ -650,7 +679,7 @@ function rebuildOffscreen() {
       viewX = dragStartViewX - (dx * scaleX) / zoom;
       viewY = dragStartViewY - (dy * scaleY) / zoom;
       clampCamera();
-      drawMap();
+      needsRedraw = true;
     });
 
     window.addEventListener('mouseup', () => {
@@ -674,7 +703,7 @@ function rebuildOffscreen() {
         viewY = worldY - my / newZoom;
         zoom = newZoom;
         clampCamera();
-        drawMap();
+        needsRedraw = true;
       }
     });
 
@@ -717,7 +746,7 @@ function rebuildOffscreen() {
         viewX = dragStartViewX - (dx * scaleX) / zoom;
         viewY = dragStartViewY - (dy * scaleY) / zoom;
         clampCamera();
-        drawMap();
+        needsRedraw = true;
       } else if (t.length === 2 && lastTouches) {
         const newDist = Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
         const scale = newDist / lastTouches.dist;
@@ -734,7 +763,7 @@ function rebuildOffscreen() {
         viewY = worldY - cy / newZoom;
         lastTouches = { dist: newDist, cx: lastTouches.cx, cy: lastTouches.cy, viewX, viewY, zoom };
         clampCamera();
-        drawMap();
+        needsRedraw = true;
       }
     });
 
@@ -782,7 +811,7 @@ function rebuildOffscreen() {
         viewX = closest.worldX - canvas.width / (2 * zoom);
         viewY = closest.worldY - canvas.height / (2 * zoom);
         clampCamera();
-        drawMap();
+        needsRedraw = true;
       }
     });
 
@@ -925,11 +954,11 @@ if (data.faction !== undefined) {
         rebuildOffscreen();
         rebuildTerritoryCache();
         updateAdjacentSet();
-        drawMap();
+        needsRedraw = true;
         updateInfo(`Лайков: ${currentPlayer.likes}`);
       } else {
         updateAdjacentSet();
-        drawMap();
+        needsRedraw = true;
         updateInfo(`Лайков: ${currentPlayer.likes}`);
       }
     }
@@ -990,7 +1019,7 @@ if (data.faction !== undefined) {
     rebuildOffscreen();
     rebuildTerritoryCache();
     updateAdjacentSet();
-    drawMap();
+    needsRedraw = true;
   })
   .catch(err => console.error('Ошибка sync:', err));
 }
@@ -1004,7 +1033,7 @@ if (data.faction !== undefined) {
         hideSelection();
         startGame();
         updateInfo('Режим наблюдателя');
-        drawMap();
+        needsRedraw = true;
       });
     }
 
@@ -1276,8 +1305,9 @@ const endY = Math.min(
   if (!cells.length) {
     map = serverMap;
     rebuildOffscreen();
+    rebuildTerritoryCache(); 
     updateAdjacentSet();
-    drawMap();
+    needsRedraw = true; 
     updateInfo(`Лайков: ${currentPlayer.likes}`);
     animating = false;
     return;
@@ -1297,7 +1327,7 @@ const endY = Math.min(
       animating = false;
       rebuildTerritoryCache();
       updateAdjacentSet();
-      drawMap();
+      needsRedraw = true; 
       updateInfo(`Лайков: ${currentPlayer.likes}`);
       return;
     }
@@ -1343,7 +1373,7 @@ function startGame() {
     rebuildOffscreen();
     rebuildTerritoryCache();
     updateAdjacentSet();
-    drawMap();
+    needsRedraw = true;
     return;
   }
 
@@ -1372,7 +1402,7 @@ function startGame() {
     rebuildTerritoryCache();
     updateAdjacentSet();
     hideLoadingScreen();   // ← скрываем загрузку
-    drawMap();
+    needsRedraw = true;
     updateInfo(`Лайков: ${currentPlayer.likes}`);
 
     if (!window.stateInterval) {
@@ -1392,6 +1422,7 @@ function startGame() {
 }
 
     // ---------- ИНИЦИАЛИЗАЦИЯ ----------
+    startRenderLoop();   // запускаем цикл отрисовки сразу
     vkBridge.send('VKWebAppInit')
       .then(() => vkBridge.send('VKWebAppGetUserInfo'))
       .then(data => {
@@ -1452,7 +1483,7 @@ function startGame() {
         updateInfo('⚠️ Нет связи с сервером: ' + err.message);
         console.error(err);
         resizeCanvas();
-        drawMap();
+        needsRedraw = true;
       });
 
     const AVAILABLE_HASHTAGS = [
