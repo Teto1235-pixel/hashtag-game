@@ -467,11 +467,12 @@ if (donateBtn) {
         body: JSON.stringify({ userId: currentPlayer.id })
       }).then(r => r.json());
       if (resp.success) {
-        currentPlayer.hashtag = null;
-        currentPlayer.likes = 0;
-        applyServerResponse(resp, null);
-        factionPanel.style.display = 'none';
-      } else alert(resp.error);
+    currentPlayer.hashtag = null;
+    currentPlayer.likes = 0;
+    factionPanel.style.display = 'none';
+    fetchState();          // обновит данные с сервера
+    needsRedraw = true;    // перерисует карту и интерфейс
+} else alert(resp.error);
     });
   }
 });
