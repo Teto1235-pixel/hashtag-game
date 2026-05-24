@@ -453,7 +453,6 @@ if (donateBtn) {
   currentPlayer.faction = res.baseHashtag;
   applyServerResponse(resp, null);
   factionPanel.style.display = 'none';
-  showLoadingScreen();
   startGame();
 } else alert(resp.error);
     });
@@ -1415,18 +1414,10 @@ function hideLoadingScreen() {
 }
 
 function startGame() {
-  if (window.stateInterval) {
-    rebuildOffscreen();
-    rebuildTerritoryCache();
-    updateAdjacentSet();
-    needsRedraw = true;
-    return;
+  if (!window.stateInterval) {
+    showLoadingScreen();
+    resizeCanvas();
   }
-
-  showLoadingScreen();   // ← показываем загрузку
-
-  resizeCanvas();
-
   fetch(`${SERVER_URL}/map`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1437,7 +1428,6 @@ function startGame() {
     if (data.map) map = data.map;
     if (data.worldW) MAP_W = data.worldW;
     if (data.worldH) MAP_H = data.worldH;
-
     if (!offscreen || offscreen.width !== MAP_W * CELL_SIZE || offscreen.height !== MAP_H * CELL_SIZE) {
       offscreen = document.createElement('canvas');
       offscreen.width = MAP_W * CELL_SIZE;
@@ -1447,7 +1437,7 @@ function startGame() {
     rebuildOffscreen();
     rebuildTerritoryCache();
     updateAdjacentSet();
-    hideLoadingScreen();   // ← скрываем загрузку
+    if (!window.stateInterval) hideLoadingScreen();
     needsRedraw = true;
     updateInfo(`Лайков: ${currentPlayer.likes}`);
     fetchState();
@@ -1462,7 +1452,7 @@ function startGame() {
     fetchChatMessages();
   })
   .catch(err => {
-    hideLoadingScreen();
+    if (!window.stateInterval) hideLoadingScreen();
     updateInfo('⚠️ Ошибка загрузки мира: ' + err.message);
   });
 }
