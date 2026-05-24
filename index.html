@@ -459,22 +459,32 @@ if (donateBtn) {
     });
   });
   const releaseMinorBtnLocal = document.getElementById('releaseMinorBtn');
-  if (releaseMinorBtnLocal) {
+if (releaseMinorBtnLocal) {
     releaseMinorBtnLocal.addEventListener('click', async () => {
-      const resp = await fetch(`${SERVER_URL}/faction/release`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentPlayer.id })
-      }).then(r => r.json());
-      if (resp.success) {
-    currentPlayer.hashtag = null;
-    currentPlayer.likes = 0;
-    factionPanel.style.display = 'none';
-    fetchState();          // обновит данные с сервера
-    needsRedraw = true;    // перерисует карту и интерфейс
-} else alert(resp.error);
+        const resp = await fetch(`${SERVER_URL}/faction/release`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: currentPlayer.id })
+        }).then(r => r.json());
+        if (resp.success) {
+            // Сразу применяем изменения, не дожидаясь fetchState
+            currentPlayer.hashtag = null;
+            currentPlayer.likes = 0;
+            factionPanel.style.display = 'none';
+            // Принудительно запрашиваем актуальное состояние (карту и данные)
+            await fetch(`${SERVER_URL}/sync`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: currentPlayer.id })
+            })
+            .then(r => r.json())
+            .then(data => {
+                applyServerResponse(data, null);
+                needsRedraw = true;
+            });
+        } else alert(resp.error);
     });
-  }
+}
 });
 
 document.getElementById('closeFactionBtn').addEventListener('click', () => {
