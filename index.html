@@ -405,7 +405,7 @@ f.minors.filter(m => m.occupiedBy && m.occupiedBy !== currentPlayer.id).forEach(
 });
 html += '</select>';
 html += '<input type="number" id="donateAmount" min="1" placeholder="Сколько">';
-html += '<button id="donateBtn">Передать</button></p>';
+html += '<button data-action="donate">Передать</button></p>';
   html += '<h4>Наблюдатели:</h4>';
   f.observers.forEach(o => {
     html += `<p>${o.nickname}</p>`;
@@ -417,7 +417,30 @@ html += '<button id="donateBtn">Передать</button></p>';
   }
   factionContent.innerHTML = html;
   factionPanel.style.display = 'block';
-  
+  // Обработчик кнопки "Передать"
+const donateBtn = factionContent.querySelector('[data-action="donate"]');
+if (donateBtn) {
+  donateBtn.addEventListener('click', async () => {
+    const target = document.getElementById('donateTarget').value;
+    const amount = parseInt(document.getElementById('donateAmount').value);
+    if (!amount || amount < 1) return;
+    try {
+      const resp = await fetch(`${SERVER_URL}/faction/donate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentPlayer.id, targetUserId: target, amount })
+      }).then(r => r.json());
+      if (resp.success) {
+        factionBtn.click();        // переоткрыть панель
+        fetchState();              // обновить баланс
+      } else {
+        updateInfo(resp.error);
+      }
+    } catch (e) {
+      updateInfo('Ошибка сети');
+    }
+  });
+}
   // Обработчики кнопок
   document.querySelectorAll('[data-action="claim"]').forEach(btn => {
     btn.addEventListener('click', async (e) => {
@@ -456,23 +479,6 @@ html += '<button id="donateBtn">Передать</button></p>';
   }
 });
 
- const donateBtn = document.getElementById('donateBtn');
-if (donateBtn) {
-  donateBtn.addEventListener('click', async () => {
-    const target = document.getElementById('donateTarget').value;
-    const amount = parseInt(document.getElementById('donateAmount').value);
-    if (!amount || amount < 1) return;
-    const resp = await fetch(`${SERVER_URL}/faction/donate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: currentPlayer.id, targetUserId: target, amount })
-    }).then(r => r.json());
-     if (resp.success) {
-      factionBtn.click();        // переоткрыть панель
-      fetchState();              // сразу обновить состояние (баланс)
-    } else updateInfo(resp.error);
-  });
-}
 document.getElementById('closeFactionBtn').addEventListener('click', () => {
   factionPanel.style.display = 'none';
 });
