@@ -1202,10 +1202,7 @@ if (!animating && currentPlayer.id) {
 
   for (const [owner, bounds] of Object.entries(boundsMap)) {
     const info = playersInfo[owner];
-    console.log('owner:', owner, 'info:', info);
     if (!info || !info.hashtag) continue;
-    console.log('passed info check, hashtag:', info.hashtag);
-
     if (AVAILABLE_HASHTAGS.includes(info.hashtag)) {
       // Командир – объединяем с его фракцией
       const base = info.hashtag; // фракция = его хештег
@@ -1237,7 +1234,6 @@ if (!animating && currentPlayer.id) {
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    console.log('drawing text:', `#${b.hashtag}`, 'at', centerX, centerY, 'fontSize:', fontSize);
     ctx.fillText(`#${b.hashtag}`, centerX, centerY - fontSize * 0.2);
     ctx.font = `${fontSize * 0.6}px "Courier New", monospace`;
     ctx.fillText(`${b.count}`, centerX, centerY + fontSize * 0.6);
