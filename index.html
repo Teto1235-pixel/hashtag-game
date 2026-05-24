@@ -1176,41 +1176,85 @@ const endY = Math.min(
           ctx.strokeRect(cx * CELL_SIZE, cy * CELL_SIZE, CELL_SIZE, CELL_SIZE);
         });
       }
-      const drawnOwners = new Set();
-      if (!animating && currentPlayer.id) {
-        const cacheSize = Object.keys(territoryBoundsCache).length;
-        updateInfo('Кеш: ' + cacheSize + ' владельцев');
+      // ---------- НОВЫЕ ПОДПИСИ (всегда работают) ----------
+if (!animating && currentPlayer.id) {
+  // Собираем границы для каждого ownerId
+  const boundsMap = {};
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      const owner = map[y][x].ownerId;
+      if (!owner) continue;
+      if (!boundsMap[owner]) {
+        boundsMap[owner] = { minX: x, minY: y, maxX: x, maxY: y, count: 0 };
       }
-      for (let y = startY; y < endY; y++) {
-       for (let x = startX; x < endX; x++) {
-          const owner = map[y][x].ownerId;
-          if (!owner || drawnOwners.has(owner)) continue;
-          drawnOwners.add(owner);
-          const bounds = territoryBoundsCache[owner];
-if (!bounds || bounds.count === 0) continue;
-          const info = playersInfo[owner];
-          if (!info) continue;
-          const centerX = (bounds.minX + bounds.maxX) / 2 * CELL_SIZE + CELL_SIZE / 2;
-          const centerY = (bounds.minY + bounds.maxY) / 2 * CELL_SIZE + CELL_SIZE / 2;
-          const area = bounds.width * bounds.height;
-          let fontSize = Math.max(10, Math.sqrt(area) * 2.2);
-          // Проверяем, малый ли это хештег (не входит в список базовых)
-          const isMinor = info.hashtag && !AVAILABLE_HASHTAGS.includes(info.hashtag);
-          if (isMinor) {
-            fontSize *= 0.7;
-            ctx.fillStyle = 'rgba(0,0,0,0.25)';
-          } else {
-            ctx.fillStyle = 'rgba(0,0,0,0.5)';
-          }
-          ctx.font = `bold ${fontSize}px "Courier New", monospace`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(info.hashtag || '?', centerX, centerY - fontSize * 0.2);
-          ctx.font = `${fontSize * 0.6}px "Courier New", monospace`;
-          ctx.fillText(`${bounds.count}`, centerX, centerY + fontSize * 0.6);
-        }
+      const b = boundsMap[owner];
+      if (x < b.minX) b.minX = x;
+      if (y < b.minY) b.minY = y;
+      if (x > b.maxX) b.maxX = x;
+      if (y > b.maxY) b.maxY = y;
+      b.count++;
+    }
+  }
+
+  // Определяем фракции (для объединения территорий командиров)
+  const factionBounds = {}; // baseHashtag -> bounds
+  const minorBounds = [];   // малые хештеги (подчинённые)
+
+  for (const [owner, bounds] of Object.entries(boundsMap)) {
+    const info = playersInfo[owner];
+    if (!info || !info.hashtag) continue;
+
+    if (AVAILABLE_HASHTAGS.includes(info.hashtag)) {
+      // Командир – объединяем с его фракцией
+      const base = info.hashtag; // фракция = его хештег
+      if (!factionBounds[base]) {
+        factionBounds[base] = { ...bounds, hashtag: base, count: 0 };
       }
-      ctx.textAlign = 'start';
+      // расширяем bounding box фракции
+      const fb = factionBounds[base];
+      if (bounds.minX < fb.minX) fb.minX = bounds.minX;
+      if (bounds.minY < fb.minY) fb.minY = bounds.minY;
+      if (bounds.maxX > fb.maxX) fb.maxX = bounds.maxX;
+      if (bounds.maxY > fb.maxY) fb.maxY = bounds.maxY;
+      fb.count += bounds.count;
+    } else {
+      // Подчинённый (малый хештег)
+      minorBounds.push({ ...bounds, hashtag: info.hashtag, owner });
+    }
+  }
+
+  // Отрисовываем подписи командиров
+  ctx.save();
+  for (const base in factionBounds) {
+    const b = factionBounds[base];
+    const centerX = (b.minX + b.maxX) / 2 * CELL_SIZE + CELL_SIZE / 2;
+    const centerY = (b.minY + b.maxY) / 2 * CELL_SIZE + CELL_SIZE / 2;
+    const area = (b.maxX - b.minX + 1) * (b.maxY - b.minY + 1);
+    let fontSize = Math.max(12, Math.sqrt(area) * 2.2);
+    ctx.font = `bold ${fontSize}px "Courier New", monospace`;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`#${b.hashtag}`, centerX, centerY - fontSize * 0.2);
+    ctx.font = `${fontSize * 0.6}px "Courier New", monospace`;
+    ctx.fillText(`${b.count}`, centerX, centerY + fontSize * 0.6);
+  }
+
+  // Отрисовываем подписи подчинённых
+  for (const b of minorBounds) {
+    const centerX = (b.minX + b.maxX) / 2 * CELL_SIZE + CELL_SIZE / 2;
+    const centerY = (b.minY + b.maxY) / 2 * CELL_SIZE + CELL_SIZE / 2;
+    const area = (b.maxX - b.minX + 1) * (b.maxY - b.minY + 1);
+    let fontSize = Math.max(10, Math.sqrt(area) * 1.8); // чуть меньше
+    ctx.font = `bold ${fontSize}px "Courier New", monospace`;
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`#${b.hashtag}`, centerX, centerY);
+  }
+  ctx.restore();
+  ctx.textAlign = 'start'; // сброс
+}
       // Штриховка и пунктир для подчинённых
       for (let y = startY; y < endY; y++) {
        for (let x = startX; x < endX; x++) {
