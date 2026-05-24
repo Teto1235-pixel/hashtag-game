@@ -174,9 +174,6 @@
     let adjacentSet = new Set();
     let leaderboard = [];
     let animating = false;
-    let animationQueue = [];
-    let animationTimer = null;
-    let pendingMap = null; 
     let hashtagLikes = {};
     let territoryBoundsCache = {};
     // Оффскрин-канвас для кеширования карты
@@ -1367,57 +1364,20 @@ if (!animating && currentPlayer.id) {
 
     function updateInfo(text) { document.getElementById('info').textContent = text; }
 
-    function animateCapture(cells, serverMap) {
-  if (animationTimer) cancelAnimationFrame(animationTimer);
+  function animateCapture(cells, serverMap) {
+  // Мгновенное обновление 
   if (!Array.isArray(serverMap)) {
     animating = false;
     return;
   }
-  if (!cells.length) {
-    map = serverMap;
-    rebuildOffscreen();
-    rebuildTerritoryCache(); 
-    updateAdjacentSet();
-    needsRedraw = true; 
-    updateInfo(`Лайков: ${currentPlayer.likes}`);
-    animating = false;
-    return;
-  }
-
-  animating = true;
-  pendingMap = serverMap;
-  animationQueue = [...cells];
-
-  const BATCH_SIZE = 20; // клеток за кадр
-
-  function step() {
-    if (!animationQueue.length) {
-      map = pendingMap;
-      pendingMap = null;
-      rebuildOffscreen();
-      animating = false;
-      rebuildTerritoryCache();
-      updateAdjacentSet();
-      needsRedraw = true; 
-      updateInfo(`Лайков: ${currentPlayer.likes}`);
-      return;
-    }
-
-    // обрабатываем до BATCH_SIZE клеток за один кадр
-    for (let i = 0; i < BATCH_SIZE && animationQueue.length > 0; i++) {
-      const cell = animationQueue.shift();
-      if (map[cell.y] && map[cell.y][cell.x]) {
-        map[cell.y][cell.x] = {
-          ownerId: currentPlayer.id,
-          hashtag: currentPlayer.hashtag
-        };
-      }
-    }
-    drawMap();
-    animationTimer = requestAnimationFrame(step);
-  }
-
-  animationTimer = requestAnimationFrame(step);
+  // Сразу применяем новую карту
+  map = serverMap;
+  rebuildOffscreen();
+  rebuildTerritoryCache();
+  updateAdjacentSet();
+  needsRedraw = true;
+  updateInfo(`Лайков: ${currentPlayer.likes}`);
+  animating = false;
 }
 
 function showLoadingScreen() {
