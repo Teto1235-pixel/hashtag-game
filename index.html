@@ -148,6 +148,12 @@
     const SERVER_URL = 'https://8dc09175-a6a1-4cb5-bc80-7ceda74f0beb.tunnel4.com'; // ваш актуальный адрес
 
     const canvas = document.getElementById('gameCanvas');
+    const AVAILABLE_HASHTAGS = [
+      'Azur_lane', 'Girls_Frontline', 'Arknights', 'Fate',
+      'Genshin_Impact', 'Hololive', 'Blue_Archive', 'Uma_Musume',
+      'Honkai_Impact', 'Princess_Connect', 'ZenlessZoneZero', 'NIKKE',
+      'HonkaiStarRail', 'WutheringWaves', 'BrownDust2', 'Neverness_to_Everness'
+    ];
     const ctx = canvas.getContext('2d');
 
     function resizeCanvas() {
@@ -1171,13 +1177,17 @@ const endY = Math.min(
         });
       }
       const drawnOwners = new Set();
+      console.log('drawMap start, animating:', animating, 'offscreen:', !!offscreen);
+console.log('territoryBoundsCache size:', Object.keys(territoryBoundsCache).length);
+console.log('sample entries:', Object.entries(territoryBoundsCache).slice(0,3));
       for (let y = startY; y < endY; y++) {
        for (let x = startX; x < endX; x++) {
           const owner = map[y][x].ownerId;
           if (!owner || drawnOwners.has(owner)) continue;
+          console.log('drawing label for owner:', owner, 'hashtag:', playersInfo[owner]?.hashtag);
           drawnOwners.add(owner);
           const bounds = territoryBoundsCache[owner];
-          if (bounds.count === 0) continue;
+if (!bounds || bounds.count === 0) continue;
           const info = playersInfo[owner];
           if (!info) continue;
           const centerX = (bounds.minX + bounds.maxX) / 2 * CELL_SIZE + CELL_SIZE / 2;
@@ -1486,12 +1496,7 @@ function startGame() {
         needsRedraw = true;
       });
 
-    const AVAILABLE_HASHTAGS = [
-      'Azur_lane', 'Girls_Frontline', 'Arknights', 'Fate',
-      'Genshin_Impact', 'Hololive', 'Blue_Archive', 'Uma_Musume',
-      'Honkai_Impact', 'Princess_Connect', 'ZenlessZoneZero', 'NIKKE',
-      'HonkaiStarRail', 'WutheringWaves', 'BrownDust2', 'Neverness_to_Everness'
-    ];
+    
   </script>
 </body>
 </html>
