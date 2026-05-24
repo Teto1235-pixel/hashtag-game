@@ -408,7 +408,7 @@ html += '<button data-action="donate">Передать</button></p>';
     html += `<p>${o.nickname}</p>`;
   });
   // Кнопка освобождения для подчинённого
-  if (!currentPlayer.hashtag && currentPlayer.nickname) {
+  if (currentPlayer.nickname) {
     const myMinor = f.minors.find(m => m.occupiedBy === currentPlayer.id);
     if (myMinor) html += `<button id="releaseMinorBtn">Освободить хештег</button>`;
   }
