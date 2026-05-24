@@ -1177,6 +1177,10 @@ const endY = Math.min(
         });
       }
       const drawnOwners = new Set();
+      if (!animating && currentPlayer.id) {
+        const cacheSize = Object.keys(territoryBoundsCache).length;
+        updateInfo('Кеш: ' + cacheSize + ' владельцев');
+      }
       for (let y = startY; y < endY; y++) {
        for (let x = startX; x < endX; x++) {
           const owner = map[y][x].ownerId;
