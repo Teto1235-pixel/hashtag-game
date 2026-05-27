@@ -176,7 +176,7 @@
     let animating = false;
     let hashtagLikes = {};
     let territoryBoundsCache = {};
-    let labelCache = { commanders: [], minors: [] };  // кэш подписей
+    let labelCache = { commanders: [], minors: [] };
 
     let offscreen = null;
     let offCtx = null;
@@ -197,6 +197,9 @@
     let newestMessageTimestamp = 0;
     let needsRedraw = true;
     let renderLoopRunning = false;
+
+    // Версия карты (для дельта‑обновлений)
+    let currentMapVersion = 0;
 
     // UI элементы
     const attackPanel = document.getElementById('attackPanel');
@@ -459,7 +462,7 @@
       factionContent.innerHTML = html;
       factionPanel.style.display = 'block';
 
-      // Обработчик освобождения (один, пересоздаётся каждый раз – допустимо, т.к. элемент новый)
+      // Обработчик освобождения
       const releaseMinorBtnLocal = document.getElementById('releaseMinorBtn');
       if (releaseMinorBtnLocal) {
         releaseMinorBtnLocal.addEventListener('click', async () => {
@@ -472,18 +475,23 @@
             currentPlayer.hashtag = null;
             currentPlayer.likes = 0;
             factionPanel.style.display = 'none';
-            try {
-              const syncRes = await fetch(`${SERVER_URL}/sync`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: currentPlayer.id })
-              });
-              const data = await syncRes.json();
-              applyServerResponse(data, null);
-              needsRedraw = true;
-            } catch (e) {
-              updateInfo('Ошибка обновления');
+            if (resp.changedCells) {
+              applyServerResponse(resp, null);
+            } else {
+              // если сервер не прислал дельту – запросим полную карту
+              try {
+                const syncRes = await fetch(`${SERVER_URL}/sync`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ userId: currentPlayer.id, clientVersion: currentMapVersion })
+                });
+                const data = await syncRes.json();
+                applyServerResponse(data, null);
+              } catch (e) {
+                updateInfo('Ошибка обновления');
+              }
             }
+            needsRedraw = true;
           } else {
             updateInfo(resp.error);
           }
@@ -533,8 +541,7 @@
       const safeH = Math.min(MAP_H, map.length);
       const safeW = Math.min(MAP_W, map[0]?.length || 0);
 
-      // Собираем границы и одновременно заполняем карту владельцев для labelCache
-      const ownerMap = new Map(); // ownerId -> { minX, minY, maxX, maxY, count }
+      const ownerMap = new Map();
       for (let y = 0; y < safeH; y++) {
         for (let x = 0; x < safeW; x++) {
           const owner = map[y][x].ownerId;
@@ -558,7 +565,6 @@
         territoryBoundsCache[owner] = { minX: b.minX, minY: b.minY, maxX: b.maxX, maxY: b.maxY, count: b.count };
       }
 
-      // пересобираем myCells
       myCells = [];
       const isCommander = currentPlayer.hashtag && AVAILABLE_HASHTAGS.includes(currentPlayer.hashtag);
       for (let y = 0; y < safeH; y++) {
@@ -585,8 +591,7 @@
         myCenterY = 0;
       }
 
-      // Построение кэша подписей (labelCache)
-      const factionBounds = {}; // baseHashtag -> bounds
+      const factionBounds = {};
       const minorBounds = [];
 
       for (const [owner, bounds] of ownerMap.entries()) {
@@ -638,6 +643,26 @@
             offCtx.fillStyle = '#b0b0b0';
             offCtx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
           }
+        }
+      }
+    }
+
+    // Обновление только изменившихся клеток на оффскрине
+    function updateOffscreenForChanges(changes) {
+      if (!offCtx || !changes || !changes.length) return;
+      for (const ch of changes) {
+        const { x, y, ownerId, hashtag } = ch;
+        if (x < 0 || x >= MAP_W || y < 0 || y >= MAP_H) continue;
+        if (ownerId) {
+          const info = playersInfo[ownerId];
+          offCtx.fillStyle = info ? info.color : '#cccccc';
+          offCtx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        } else if (hashtag) {
+          offCtx.fillStyle = '#b0b0b0';
+          offCtx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        } else {
+          offCtx.fillStyle = '#ffffff';
+          offCtx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
         }
       }
     }
@@ -938,6 +963,12 @@
 
     // ---------- СЕРВЕРНЫЕ ЗАПРОСЫ ----------
     function applyServerResponse(data, capturedCells) {
+      // Версия карты
+      if (data.mapVersion !== undefined) {
+        currentMapVersion = data.mapVersion;
+      }
+
+      // Обработка фракции
       if (data.faction !== undefined) {
         currentPlayer.faction = data.faction;
       } else if (data.player && data.player.faction !== undefined) {
@@ -978,9 +1009,32 @@
         gameoverDiv.style.display = 'flex';
       }
 
-      if (capturedCells?.length && data.map && Array.isArray(data.map)) {
-        animateCapture(capturedCells, data.map);
-      } else if (data.map && Array.isArray(data.map)) {
+      // Дельта‑обновление: применяем changedCells, если есть
+      if (data.changedCells && data.changedCells.length) {
+        for (const ch of data.changedCells) {
+          if (ch.x >= 0 && ch.x < MAP_W && ch.y >= 0 && ch.y < MAP_H) {
+            map[ch.y][ch.x].ownerId = ch.ownerId;
+            map[ch.y][ch.x].hashtag = ch.hashtag;
+          }
+        }
+        updateOffscreenForChanges(data.changedCells);
+        rebuildTerritoryCache();
+        updateAdjacentSet();
+        needsRedraw = true;
+        updateInfo(`Лайков: ${currentPlayer.likes}`);
+        return; // не обрабатываем data.map
+      }
+
+      // Если сервер прислал полную карту (data.map существует и либо fullMap, либо нет changedCells)
+      if (data.map && Array.isArray(data.map)) {
+        map = data.map;
+        rebuildOffscreen();
+        rebuildTerritoryCache();
+        updateAdjacentSet();
+        needsRedraw = true;
+        updateInfo(`Лайков: ${currentPlayer.likes}`);
+      } else if (capturedCells?.length && data.map && Array.isArray(data.map)) {
+        // старый путь (на случай, если changedCells не пришли)
         map = data.map;
         rebuildOffscreen();
         rebuildTerritoryCache();
@@ -1039,18 +1093,15 @@
       fetch(`${SERVER_URL}/sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentPlayer.id })
+        body: JSON.stringify({ userId: currentPlayer.id, clientVersion: currentMapVersion })
       })
       .then(r => r.json())
       .then(data => {
         applyServerResponse(data, null);
-        if (isValidMap(data.map)) map = data.map;
-        if (data.worldW) MAP_W = data.worldW;
-        if (data.worldH) MAP_H = data.worldH;
-        rebuildOffscreen();
-        rebuildTerritoryCache();
-        updateAdjacentSet();
-        needsRedraw = true;
+        if (!data.changedCells && !data.map) {
+          // если карта не изменилась – перерисовывать не обязательно, но обновим UI
+          needsRedraw = true;
+        }
       })
       .catch(err => console.error('Ошибка sync:', err));
     }
@@ -1364,6 +1415,7 @@
         if (data.map) map = data.map;
         if (data.worldW) MAP_W = data.worldW;
         if (data.worldH) MAP_H = data.worldH;
+        if (data.mapVersion !== undefined) currentMapVersion = data.mapVersion;
         if (!offscreen || offscreen.width !== MAP_W * CELL_SIZE || offscreen.height !== MAP_H * CELL_SIZE) {
           offscreen = document.createElement('canvas');
           offscreen.width = MAP_W * CELL_SIZE;
@@ -1437,6 +1489,7 @@
           updateTimer();
           if (!timerInterval) timerInterval = setInterval(updateTimer, 1000);
         }
+        if (state.mapVersion !== undefined) currentMapVersion = state.mapVersion;
         currentPlayer.color = state.player?.color || '#cccccc';
         currentPlayer.faction = state.faction;
 
