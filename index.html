@@ -36,6 +36,11 @@
     #menuPanel, #selection { display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:white; border:1px solid #ccc; padding:20px; z-index:20; }
     #menuPanel { text-align:center; }
     #selection { max-height:80vh; overflow-y:auto; }
+    #hashtagList {
+      max-height: 50vh;
+      overflow-y: auto;
+      margin-bottom: 10px;
+    }
     #selection button.taken { background:#ffcccc; color:#900; cursor:not-allowed; text-decoration:line-through; }
     #attackPanel { display:none; position:absolute; bottom:20px; left:50%; transform:translateX(-50%); background:white; border:1px solid #ccc; padding:15px; z-index:20; text-align:center; }
     #gameover { display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:100; justify-content:center; align-items:center; flex-direction:column; color:white; font-size:24px; }
@@ -145,7 +150,7 @@
     const CELL_SIZE = 8;
     let MAP_W = 320;
     let MAP_H = 180;
-    const SERVER_URL = ' https://019e6978-448a-7470-83ce-2265f4c421c5.tunnel4.com';
+    const SERVER_URL = 'https://019e6978-448a-7470-83ce-2265f4c421c5.tunnel4.com';
 
     const canvas = document.getElementById('gameCanvas');
     const AVAILABLE_HASHTAGS = [
@@ -167,7 +172,7 @@
 
     // ---------- СОСТОЯНИЕ ----------
     const currentPlayer = {
-      id: null, likes: 0, color: '#cccccc', hashtag: null, nickname: null, spawnX: 0, spawnY: 0
+      id: null, likes: 0, color: '#cccccc', hashtag: null, nickname: null, spawnX: 0, spawnY: 0, blockedUntil: 0
     };
     let map = Array(MAP_H).fill(null).map(() => Array(MAP_W).fill().map(() => ({ ownerId: null, hashtag: '' })));
     let playersInfo = {};
@@ -198,7 +203,6 @@
     let needsRedraw = true;
     let renderLoopRunning = false;
 
-    // Версия карты (для дельта‑обновлений)
     let currentMapVersion = 0;
 
     // UI элементы
@@ -212,6 +216,9 @@
     const leaderboardDiv = document.getElementById('leaderboard');
     const selectionDiv = document.getElementById('selection');
     const gameoverDiv = document.getElementById('gameover');
+    document.getElementById('gameoverSpectate').addEventListener('click', () => {
+      spectate();
+    });
     const chatPanel = document.getElementById('chatPanel');
     const chatMessages = document.getElementById('chatMessages');
     const chatInput = document.getElementById('chatInput');
@@ -405,7 +412,7 @@
             body: JSON.stringify({ userId: currentPlayer.id, targetUserId: target, amount })
           }).then(r => r.json());
           if (resp.success) {
-            factionBtn.click();  // переоткрыть панель
+            factionBtn.click();
             fetchState();
           } else {
             updateInfo(resp.error);
@@ -462,7 +469,6 @@
       factionContent.innerHTML = html;
       factionPanel.style.display = 'block';
 
-      // Обработчик освобождения
       const releaseMinorBtnLocal = document.getElementById('releaseMinorBtn');
       if (releaseMinorBtnLocal) {
         releaseMinorBtnLocal.addEventListener('click', async () => {
@@ -478,7 +484,6 @@
             if (resp.changedCells) {
               applyServerResponse(resp, null);
             } else {
-              // если сервер не прислал дельту – запросим полную карту
               try {
                 const syncRes = await fetch(`${SERVER_URL}/sync`, {
                   method: 'POST',
@@ -647,7 +652,6 @@
       }
     }
 
-    // Обновление только изменившихся клеток на оффскрине
     function updateOffscreenForChanges(changes) {
       if (!offCtx || !changes || !changes.length) return;
       for (const ch of changes) {
@@ -963,12 +967,10 @@
 
     // ---------- СЕРВЕРНЫЕ ЗАПРОСЫ ----------
     function applyServerResponse(data, capturedCells) {
-      // Версия карты
       if (data.mapVersion !== undefined) {
         currentMapVersion = data.mapVersion;
       }
 
-      // Обработка фракции
       if (data.faction !== undefined) {
         currentPlayer.faction = data.faction;
       } else if (data.player && data.player.faction !== undefined) {
@@ -985,6 +987,9 @@
           document.getElementById('setNicknameBtn').style.display = 'none';
           document.getElementById('nicknameDisplay').textContent = 'Ник: ' + data.player.nickname;
           document.getElementById('nicknameDisplay').style.display = 'inline';
+        }
+        if (data.player.blockedUntil !== undefined) {
+          currentPlayer.blockedUntil = data.player.blockedUntil;
         }
       }
       if (data.playersInfo) playersInfo = data.playersInfo;
@@ -1005,11 +1010,15 @@
 
       if (currentPlayer.hashtag && data.defeatedPlayerId === currentPlayer.id) {
         currentPlayer.hashtag = null;
+        currentPlayer.faction = null;
         spectating = true;
         gameoverDiv.style.display = 'flex';
+        attackPanel.style.display = 'none';
+        legend.style.display = 'none';
+        adjacentSet.clear();
+        needsRedraw = true;
       }
 
-      // Дельта‑обновление: применяем changedCells, если есть
       if (data.changedCells && data.changedCells.length) {
         for (const ch of data.changedCells) {
           if (ch.x >= 0 && ch.x < MAP_W && ch.y >= 0 && ch.y < MAP_H) {
@@ -1022,10 +1031,9 @@
         updateAdjacentSet();
         needsRedraw = true;
         updateInfo(`Лайков: ${currentPlayer.likes}`);
-        return; // не обрабатываем data.map
+        return;
       }
 
-      // Если сервер прислал полную карту (data.map существует и либо fullMap, либо нет changedCells)
       if (data.map && Array.isArray(data.map)) {
         map = data.map;
         rebuildOffscreen();
@@ -1034,7 +1042,6 @@
         needsRedraw = true;
         updateInfo(`Лайков: ${currentPlayer.likes}`);
       } else if (capturedCells?.length && data.map && Array.isArray(data.map)) {
-        // старый путь (на случай, если changedCells не пришли)
         map = data.map;
         rebuildOffscreen();
         rebuildTerritoryCache();
@@ -1099,7 +1106,6 @@
       .then(data => {
         applyServerResponse(data, null);
         if (!data.changedCells && !data.map) {
-          // если карта не изменилась – перерисовывать не обязательно, но обновим UI
           needsRedraw = true;
         }
       })
@@ -1125,33 +1131,45 @@
       document.getElementById('canvasContainer').style.pointerEvents = 'none';
       const listDiv = document.getElementById('hashtagList');
       const spectateBtn = document.getElementById('spectateBtn');
+
       function buildList(likesData) {
         listDiv.innerHTML = '';
+        const myBlocked = currentPlayer.blockedUntil && currentPlayer.blockedUntil > Date.now();
+
         hashtags.forEach(tag => {
+          const row = document.createElement('div');
+          row.style.display = 'flex';
+          row.style.alignItems = 'center';
+          row.style.marginBottom = '6px';
+
           const btn = document.createElement('button');
           const likes = likesData[tag] || 0;
-          btn.textContent = `#${tag} (${likes})`;
+          let btnText = `#${tag} (${likes})`;
+
           if (takenHashtags?.includes(tag)) {
             btn.classList.add('taken');
             btn.disabled = true;
             btn.title = 'Хештег занят';
+
+            const owner = Object.values(playersInfo).find(p => p.hashtag === tag);
+            if (owner && owner.blockedUntil && owner.blockedUntil > Date.now() && owner.id === currentPlayer.id) {
+              const mins = Math.ceil((owner.blockedUntil - Date.now()) / 60000);
+              btnText = `#${tag} (блок. ${mins}м)`;
+            }
+            btn.textContent = btnText;
+
             const joinBtn = document.createElement('button');
             joinBtn.textContent = '👥';
             joinBtn.style.marginLeft = '4px';
             joinBtn.title = 'Присоединиться к фракции';
             joinBtn.onclick = (e) => {
               e.stopPropagation();
-              if (!currentPlayer.nickname) {
-                updateInfo('Сначала задайте ник');
-                return;
-              }
+              if (!currentPlayer.nickname) { updateInfo('Сначала задайте ник'); return; }
               fetch(`${SERVER_URL}/faction/join`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId: currentPlayer.id, baseHashtag: tag })
-              })
-              .then(r => r.json())
-              .then(res => {
+              }).then(r => r.json()).then(res => {
                 if (res.success) {
                   hideSelection();
                   factionBtn.click();
@@ -1160,21 +1178,27 @@
                 }
               });
             };
-            listDiv.appendChild(btn);
-            listDiv.appendChild(joinBtn);
+            row.appendChild(btn);
+            row.appendChild(joinBtn);
           } else {
+            btn.textContent = btnText;
             btn.onclick = () => {
-              if (!currentPlayer.nickname) {
-                updateInfo('Сначала задайте ник');
+              if (!currentPlayer.nickname) { updateInfo('Сначала задайте ник'); return; }
+              if (myBlocked) {
+                const left = Math.ceil((currentPlayer.blockedUntil - Date.now()) / 60000);
+                updateInfo(`Хештег заблокирован ещё ${left} мин.`);
                 return;
               }
               claimHashtag(tag);
             };
-            listDiv.appendChild(btn);
+            row.appendChild(btn);
           }
+          listDiv.appendChild(row);
         });
       }
+
       buildList(hashtagLikes);
+
       if (selectionRefreshInterval) clearInterval(selectionRefreshInterval);
       selectionRefreshInterval = setInterval(async () => {
         try {
@@ -1185,13 +1209,18 @@
           }).then(r => r.json());
           if (res.hashtagLikes) {
             hashtagLikes = res.hashtagLikes;
+            if (res.player) {
+              currentPlayer.blockedUntil = res.player.blockedUntil || 0;
+            }
             buildList(hashtagLikes);
           }
         } catch (e) {}
       }, 5000);
+
       spectateBtn.onclick = spectate;
       selectionDiv.style.display = 'block';
     }
+
     function hideSelection() {
       document.getElementById('overlay').style.display = 'none';
       document.getElementById('canvasContainer').style.pointerEvents = '';
@@ -1244,7 +1273,6 @@
         });
       }
 
-      // Подписи из кэша
       if (!animating && labelCache) {
         ctx.save();
         for (const b of labelCache.commanders) {
@@ -1274,7 +1302,6 @@
         ctx.restore();
       }
 
-      // Штриховка подчинённых (только видимая область)
       for (let y = startY; y < endY; y++) {
         for (let x = startX; x < endX; x++) {
           const cell = map[y][x];
@@ -1429,16 +1456,17 @@
         needsRedraw = true;
         updateInfo(`Лайков: ${currentPlayer.likes}`);
         fetchState();
-if (window.stateInterval) clearInterval(window.stateInterval);
-if (window.chatInterval) clearInterval(window.chatInterval);
 
-window.stateInterval = setInterval(fetchState, 10000);
-window.chatInterval = setInterval(fetchChatMessages, 5000); // 5 секунд вместо 3
+        if (window.stateInterval) clearInterval(window.stateInterval);
+        if (window.chatInterval) clearInterval(window.chatInterval);
 
-window.addEventListener('beforeunload', () => {
-  clearInterval(window.stateInterval);
-  clearInterval(window.chatInterval);
-});
+        window.stateInterval = setInterval(fetchState, 10000);
+        window.chatInterval = setInterval(fetchChatMessages, 5000);
+
+        window.addEventListener('beforeunload', () => {
+          clearInterval(window.stateInterval);
+          clearInterval(window.chatInterval);
+        });
         fetchChatMessages();
       })
       .catch(err => {
@@ -1478,6 +1506,9 @@ window.addEventListener('beforeunload', () => {
           if (state.player.spawnX !== undefined) {
             currentPlayer.spawnX = state.player.spawnX;
             currentPlayer.spawnY = state.player.spawnY;
+          }
+          if (state.player.blockedUntil !== undefined) {
+            currentPlayer.blockedUntil = state.player.blockedUntil;
           }
         }
         if (state.playersInfo) playersInfo = state.playersInfo;
