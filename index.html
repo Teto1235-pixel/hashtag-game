@@ -423,6 +423,16 @@
       }
     });
 
+    document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (window.chatInterval) clearInterval(window.chatInterval);
+  } else {
+    // возобновляем опрос, только если чат был запущен
+    if (currentPlayer.id && (currentPlayer.hashtag || currentPlayer.faction)) {
+      window.chatInterval = setInterval(fetchChatMessages, 10000);
+    }
+  }
+});
     factionBtn.addEventListener('click', async () => {
       const res = await fetch(`${SERVER_URL}/faction/info`, {
         method: 'POST',
@@ -478,6 +488,7 @@
             body: JSON.stringify({ userId: currentPlayer.id })
           }).then(r => r.json());
           if (resp.success) {
+            currentPlayer.faction = null;
             currentPlayer.hashtag = null;
             currentPlayer.likes = 0;
             factionPanel.style.display = 'none';
@@ -944,6 +955,7 @@
           body: JSON.stringify({ userId: currentPlayer.id })
         }).then(r => r.json());
         if (res.success) {
+          currentPlayer.faction = null;
           currentPlayer.hashtag = null;
           currentPlayer.likes = 0;
           applyServerResponse(res, null);
@@ -981,6 +993,13 @@
         currentPlayer.likes = data.player.likes;
         if (!currentPlayer.hashtag && data.player.hashtag) currentPlayer.hashtag = data.player.hashtag;
         if (data.player.spawnX !== undefined) { currentPlayer.spawnX = data.player.spawnX; currentPlayer.spawnY = data.player.spawnY; }
+        if (data.player.hashtag !== undefined) {
+        if (data.player.hashtag && AVAILABLE_HASHTAGS.includes(data.player.hashtag)) {
+      currentPlayer.faction = data.player.hashtag; // командир
+    } else if (!data.player.hashtag) {
+      currentPlayer.faction = null; // сброс, если хештега нет
+    }
+  }
         if (data.player.nickname && !currentPlayer.nickname) {
           currentPlayer.nickname = data.player.nickname;
           document.getElementById('nicknameInput').style.display = 'none';
@@ -1059,6 +1078,7 @@
       fetch(`${SERVER_URL}/claim`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:currentPlayer.id, hashtag}) })
       .then(r=>r.json()).then(res=>{
         if (res.success) {
+          currentPlayer.faction = hashtag; 
           currentPlayer.color = res.player.color;
           currentPlayer.spawnX = res.player.spawnX; currentPlayer.spawnY = res.player.spawnY;
           spectating = false;
@@ -1116,6 +1136,7 @@
       fetch(`${SERVER_URL}/spectate`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:currentPlayer.id}) })
       .then(() => {
         currentPlayer.hashtag = null;
+        currentPlayer.faction = null;   
         spectating = true;
         gameoverDiv.style.display = 'none';
         hideSelection();
