@@ -137,15 +137,15 @@
   <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
   <script>
     window.addEventListener('error', function (event) {
-  updateInfo('Ошибка в строке ' + event.lineno + ': ' + event.message);
-  // если нужно посмотреть полный стек в консоли:
-  console.error(event.error);
-});
+      updateInfo('Ошибка в строке ' + event.lineno + ': ' + event.message);
+      console.error(event.error);
+    });
+
     // ---------- НАСТРОЙКИ ----------
     const CELL_SIZE = 8;
     let MAP_W = 320;
     let MAP_H = 180;
-    const SERVER_URL = 'https://8dc09175-a6a1-4cb5-bc80-7ceda74f0beb.tunnel4.com'; // ваш актуальный адрес
+    const SERVER_URL = 'https://8dc09175-a6a1-4cb5-bc80-7ceda74f0beb.tunnel4.com';
 
     const canvas = document.getElementById('gameCanvas');
     const AVAILABLE_HASHTAGS = [
@@ -176,11 +176,11 @@
     let animating = false;
     let hashtagLikes = {};
     let territoryBoundsCache = {};
-    // Оффскрин-канвас для кеширования карты
-    var offscreen = null;
-    var offCtx = null;
-    let offscreenDirty = true;   // true = нужно полностью перерисовать
-    let myCells = []; // кеш координат своих клеток
+    let labelCache = { commanders: [], minors: [] };  // кэш подписей
+
+    let offscreen = null;
+    let offCtx = null;
+    let myCells = [];
     let myCenterX = 0;
     let myCenterY = 0;
 
@@ -188,18 +188,17 @@
     let zoom = 1;
     const MIN_ZOOM = 0.3, MAX_ZOOM = 5;
     let spectating = false;
-    let nicknameSet = false; // ← объявлена переменная
+    let nicknameSet = false;
 
-    // Таймер
     let gameOver = false;
     let gameEndTime = null;
     let timerInterval = null;
-    let lastReadTimestamp = 0; // время последнего прочитанного сообщения
+    let lastReadTimestamp = 0;
     let newestMessageTimestamp = 0;
-    let needsRedraw = true;      // флаг необходимости перерисовки
+    let needsRedraw = true;
     let renderLoopRunning = false;
 
-    // UI
+    // UI элементы
     const attackPanel = document.getElementById('attackPanel');
     const powerSlider = document.getElementById('powerSlider');
     const powerValue = document.getElementById('powerValue');
@@ -235,21 +234,20 @@
     canvas.addEventListener('gestureend', e => e.preventDefault());
     canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-
-  function startRenderLoop() {
-  if (renderLoopRunning) return;
-  renderLoopRunning = true;
-  function loop() {
-    if (needsRedraw) {
-      drawMap();
-      needsRedraw = false;
+    function startRenderLoop() {
+      if (renderLoopRunning) return;
+      renderLoopRunning = true;
+      function loop() {
+        if (needsRedraw) {
+          drawMap();
+          needsRedraw = false;
+        }
+        requestAnimationFrame(loop);
+      }
+      requestAnimationFrame(loop);
     }
-    requestAnimationFrame(loop);
-  }
-  requestAnimationFrame(loop);
-}
 
-    // --- Функция обновления таймера ---
+    // --- Таймер ---
     function updateTimer() {
       if (!gameEndTime) return;
       const now = Date.now();
@@ -294,7 +292,7 @@
       .catch(() => alert('Ошибка сети'));
     });
 
-    // --- Кнопка сохранения карты ---
+    // --- Сохранение карты ---
     document.getElementById('saveMapBtn').addEventListener('click', () => {
       const dataUrl = canvas.toDataURL('image/png');
       const link = document.createElement('a');
@@ -324,175 +322,178 @@
     chatInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') chatSendBtn.click();
     });
-   chatToggleBtn.addEventListener('click', () => {
-  if (chatPanel.style.display === 'none' || chatPanel.style.display === '') {
-    chatPanel.style.display = 'block';
-    document.getElementById('chatUnreadDot').style.display = 'none';
-    lastReadTimestamp = newestMessageTimestamp; // всё прочитано
-  } else {
-    chatPanel.style.display = 'none';
-  }
-});
+    chatToggleBtn.addEventListener('click', () => {
+      if (chatPanel.style.display === 'none' || chatPanel.style.display === '') {
+        chatPanel.style.display = 'block';
+        document.getElementById('chatUnreadDot').style.display = 'none';
+        lastReadTimestamp = newestMessageTimestamp;
+      } else {
+        chatPanel.style.display = 'none';
+      }
+    });
 
     async function fetchChatMessages() {
-  try {
-    const res = await fetch(`${SERVER_URL}/chat/get`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({})
-    }).then(r => r.json());
-    if (res.messages && res.messages.length > 0) {
-      chatMessages.innerHTML = '';
-      for (const msg of res.messages) {
-        const div = document.createElement('div');
-        div.textContent = `${msg.nickname}: ${msg.text}`;
-        chatMessages.appendChild(div);
-      }
-      chatMessages.scrollTop = chatMessages.scrollHeight;
+      try {
+        const res = await fetch(`${SERVER_URL}/chat/get`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        }).then(r => r.json());
+        if (res.messages && res.messages.length > 0) {
+          chatMessages.innerHTML = '';
+          for (const msg of res.messages) {
+            const div = document.createElement('div');
+            div.textContent = `${msg.nickname}: ${msg.text}`;
+            chatMessages.appendChild(div);
+          }
+          chatMessages.scrollTop = chatMessages.scrollHeight;
 
-      const newestTimestamp = res.messages[res.messages.length - 1].timestamp;
-      newestMessageTimestamp = newestTimestamp;
+          const newestTimestamp = res.messages[res.messages.length - 1].timestamp;
+          newestMessageTimestamp = newestTimestamp;
 
-      // Если чат открыт — сразу считаем все сообщения прочитанными
-      if (chatPanel.style.display === 'block') {
-        lastReadTimestamp = newestMessageTimestamp;
-        document.getElementById('chatUnreadDot').style.display = 'none';
-      } else if (newestTimestamp > lastReadTimestamp) {
-        // Чат закрыт и есть непрочитанные — показываем точку
-        document.getElementById('chatUnreadDot').style.display = 'block';
+          if (chatPanel.style.display === 'block') {
+            lastReadTimestamp = newestMessageTimestamp;
+            document.getElementById('chatUnreadDot').style.display = 'none';
+          } else if (newestTimestamp > lastReadTimestamp) {
+            document.getElementById('chatUnreadDot').style.display = 'block';
+          }
+        }
+      } catch (e) {
+        console.error('Ошибка чата:', e);
       }
     }
-  } catch (e) {
-    console.error('Ошибка чата:', e);
-  }
-}
 
-factionBtn.addEventListener('click', async () => {
-  const res = await fetch(`${SERVER_URL}/faction/info`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId: currentPlayer.id })
-  }).then(r => r.json());
-  if (!res.faction) {
-    factionTitle.textContent = 'Вы не состоите во фракции';
-    factionContent.innerHTML = '';
-    factionPanel.style.display = 'block';
-    return;
-  }
-  const f = res.faction;
-  factionTitle.textContent = `Фракция #${res.baseHashtag}`;
-  let html = '';
-  if (f.commander) html += `<p>Командир: ${f.commander.nickname}</p>`;
-  html += '<h4>Подчинённые:</h4>';
-  f.minors.filter(m => m.occupiedBy).forEach(m => {
-    html += `<p>${m.nickname} (${m.tag}) – ${m.likes} лайков <button data-action="view">Обзор</button></p>`;
-  });
-  html += '<h4>Свободные малые хештеги:</h4>'; 
-  f.minors.filter(m => !m.occupiedBy).forEach(m => {
-    html += `<p>#${m.tag} – ${m.likes} лайков <button data-action="claim" data-tag="${m.tag}">Занять</button></p>`;
-  });
-  html += '<h4>Передать лайки</h4>';
-html += '<p><select id="donateTarget">';
-// добавить option'ы: командир и каждый подчинённый (кроме себя)
-if (f.commander && f.commander.userId !== currentPlayer.id) {
-  html += `<option value="${f.commander.userId}">Командир ${f.commander.nickname}</option>`;
-}
-f.minors.filter(m => m.occupiedBy && m.occupiedBy !== currentPlayer.id).forEach(m => {
-  html += `<option value="${m.occupiedBy}">${m.nickname} (${m.tag})</option>`;
-});
-html += '</select>';
-html += '<input type="number" id="donateAmount" min="1" placeholder="Сколько">';
-html += '<button data-action="donate">Передать</button></p>';
-  html += '<h4>Наблюдатели:</h4>';
-  f.observers.forEach(o => {
-    html += `<p>${o.nickname}</p>`;
-  });
-  // Кнопка освобождения для подчинённого
-  if (currentPlayer.nickname) {
-    const myMinor = f.minors.find(m => m.occupiedBy === currentPlayer.id);
-    if (myMinor) html += `<button id="releaseMinorBtn">Освободить хештег</button>`;
-  }
-  factionContent.innerHTML = html;
-  factionPanel.style.display = 'block';
-  // Обработчик кнопки "Передать"
-const donateBtn = factionContent.querySelector('[data-action="donate"]');
-if (donateBtn) {
-  donateBtn.addEventListener('click', async () => {
-    const target = document.getElementById('donateTarget').value;
-    const amount = parseInt(document.getElementById('donateAmount').value);
-    if (!amount || amount < 1) return;
-    try {
-      const resp = await fetch(`${SERVER_URL}/faction/donate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentPlayer.id, targetUserId: target, amount })
-      }).then(r => r.json());
-      if (resp.success) {
-        factionBtn.click();        // переоткрыть панель
-        fetchState();              // обновить баланс
-      } else {
-        updateInfo(resp.error);
+    // --- Фракция (делегирование событий) ---
+    factionContent.addEventListener('click', async (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      if (action === 'claim') {
+        const tag = btn.dataset.tag;
+        const base = btn.dataset.base;
+        if (!tag || !base) return;
+        try {
+          const resp = await fetch(`${SERVER_URL}/faction/claim`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: currentPlayer.id, baseHashtag: base, minorTag: tag })
+          }).then(r => r.json());
+          if (resp.success) {
+            currentPlayer.hashtag = resp.minorTag;
+            currentPlayer.likes = resp.player.likes;
+            currentPlayer.faction = base;
+            applyServerResponse(resp, null);
+            factionPanel.style.display = 'none';
+            startGame();
+          } else {
+            updateInfo(resp.error);
+          }
+        } catch (err) {
+          updateInfo('Ошибка сети');
+        }
+      } else if (action === 'donate') {
+        const target = document.getElementById('donateTarget')?.value;
+        const amount = parseInt(document.getElementById('donateAmount')?.value);
+        if (!target || !amount || amount < 1) return;
+        try {
+          const resp = await fetch(`${SERVER_URL}/faction/donate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: currentPlayer.id, targetUserId: target, amount })
+          }).then(r => r.json());
+          if (resp.success) {
+            factionBtn.click();  // переоткрыть панель
+            fetchState();
+          } else {
+            updateInfo(resp.error);
+          }
+        } catch (err) {
+          updateInfo('Ошибка сети');
+        }
       }
-    } catch (e) {
-      updateInfo('Ошибка сети');
-    }
-  });
-}
-  // Обработчики кнопок
-  document.querySelectorAll('[data-action="claim"]').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      const tag = e.target.dataset.tag;
-      const resp = await fetch(`${SERVER_URL}/faction/claim`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentPlayer.id, baseHashtag: res.baseHashtag, minorTag: tag })
-      }).then(r => r.json());
-        if (resp.success) {
-  currentPlayer.hashtag = resp.minorTag;
-  currentPlayer.likes = resp.player.likes;
-  currentPlayer.faction = res.baseHashtag;
-  applyServerResponse(resp, null);
-  factionPanel.style.display = 'none';
-  startGame();
-} else alert(resp.error);
     });
-  });
-    const releaseMinorBtnLocal = document.getElementById('releaseMinorBtn');
-  if (releaseMinorBtnLocal) {
-    releaseMinorBtnLocal.addEventListener('click', async () => {
-      const resp = await fetch(`${SERVER_URL}/faction/release`, {
+
+    factionBtn.addEventListener('click', async () => {
+      const res = await fetch(`${SERVER_URL}/faction/info`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentPlayer.id })
       }).then(r => r.json());
-      if (resp.success) {
-        // Сразу применяем изменения, не дожидаясь fetchState
-        currentPlayer.hashtag = null;
-        currentPlayer.likes = 0;
-        factionPanel.style.display = 'none';
-        // Принудительно запрашиваем актуальное состояние (карту и данные)
-        try {
-          const syncRes = await fetch(`${SERVER_URL}/sync`, {
+      if (!res.faction) {
+        factionTitle.textContent = 'Вы не состоите во фракции';
+        factionContent.innerHTML = '';
+        factionPanel.style.display = 'block';
+        return;
+      }
+      const f = res.faction;
+      factionTitle.textContent = `Фракция #${res.baseHashtag}`;
+      let html = '';
+      if (f.commander) html += `<p>Командир: ${f.commander.nickname}</p>`;
+      html += '<h4>Подчинённые:</h4>';
+      f.minors.filter(m => m.occupiedBy).forEach(m => {
+        html += `<p>${m.nickname} (${m.tag}) – ${m.likes} лайков <button data-action="view">Обзор</button></p>`;
+      });
+      html += '<h4>Свободные малые хештеги:</h4>';
+      f.minors.filter(m => !m.occupiedBy).forEach(m => {
+        html += `<p>#${m.tag} – ${m.likes} лайков <button data-action="claim" data-tag="${m.tag}" data-base="${res.baseHashtag}">Занять</button></p>`;
+      });
+      html += '<h4>Передать лайки</h4>';
+      html += '<p><select id="donateTarget">';
+      if (f.commander && f.commander.userId !== currentPlayer.id) {
+        html += `<option value="${f.commander.userId}">Командир ${f.commander.nickname}</option>`;
+      }
+      f.minors.filter(m => m.occupiedBy && m.occupiedBy !== currentPlayer.id).forEach(m => {
+        html += `<option value="${m.occupiedBy}">${m.nickname} (${m.tag})</option>`;
+      });
+      html += '</select>';
+      html += '<input type="number" id="donateAmount" min="1" placeholder="Сколько">';
+      html += '<button data-action="donate">Передать</button></p>';
+      html += '<h4>Наблюдатели:</h4>';
+      f.observers.forEach(o => {
+        html += `<p>${o.nickname}</p>`;
+      });
+      if (currentPlayer.nickname) {
+        const myMinor = f.minors.find(m => m.occupiedBy === currentPlayer.id);
+        if (myMinor) html += `<button id="releaseMinorBtn">Освободить хештег</button>`;
+      }
+      factionContent.innerHTML = html;
+      factionPanel.style.display = 'block';
+
+      // Обработчик освобождения (один, пересоздаётся каждый раз – допустимо, т.к. элемент новый)
+      const releaseMinorBtnLocal = document.getElementById('releaseMinorBtn');
+      if (releaseMinorBtnLocal) {
+        releaseMinorBtnLocal.addEventListener('click', async () => {
+          const resp = await fetch(`${SERVER_URL}/faction/release`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId: currentPlayer.id })
-          });
-          const data = await syncRes.json();
-          applyServerResponse(data, null);
-          needsRedraw = true;
-        } catch (e) {
-          updateInfo('Ошибка обновления');
-        }
-      } else {
-        alert(resp.error);
+          }).then(r => r.json());
+          if (resp.success) {
+            currentPlayer.hashtag = null;
+            currentPlayer.likes = 0;
+            factionPanel.style.display = 'none';
+            try {
+              const syncRes = await fetch(`${SERVER_URL}/sync`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: currentPlayer.id })
+              });
+              const data = await syncRes.json();
+              applyServerResponse(data, null);
+              needsRedraw = true;
+            } catch (e) {
+              updateInfo('Ошибка обновления');
+            }
+          } else {
+            updateInfo(resp.error);
+          }
+        });
       }
     });
-  }
-});
 
-document.getElementById('closeFactionBtn').addEventListener('click', () => {
-  factionPanel.style.display = 'none';
-});
+    document.getElementById('closeFactionBtn').addEventListener('click', () => {
+      factionPanel.style.display = 'none';
+    });
 
     // ---------- ГРАНИЦЫ КАМЕРЫ ----------
     function clampCamera() {
@@ -510,163 +511,164 @@ document.getElementById('closeFactionBtn').addEventListener('click', () => {
       return Array.isArray(m) && m.length === MAP_H && m[0]?.length === MAP_W;
     }
 
- function updateAdjacentSet() {
-  adjacentSet.clear();
-  if (!currentPlayer.id || !currentPlayer.hashtag) return;
+    function updateAdjacentSet() {
+      adjacentSet.clear();
+      if (!currentPlayer.id || !currentPlayer.hashtag) return;
 
-  if (!myCells.length) {
-    const safeH = Math.min(MAP_H, map.length);
-    const safeW = Math.min(MAP_W, map[0]?.length || 0);
-    for (let y = 0; y < safeH; y++) {
-      for (let x = 0; x < safeW; x++) {
-        if (map[y][x].ownerId === currentPlayer.id) {
-          myCells.push({x, y});
+      const dirs = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+      for (const {x, y} of myCells) {
+        for (const [dx, dy] of dirs) {
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || nx >= MAP_W || ny < 0 || ny >= MAP_H) continue;
+          const cell = map[ny][nx];
+          if (cell.ownerId === currentPlayer.id) continue;
+          if (cell.ownerId && playersInfo[cell.ownerId]?.faction === currentPlayer.faction) continue;
+          adjacentSet.add(`${nx},${ny}`);
         }
       }
-    }
-  }
-
-  const dirs = [[0, -1], [0, 1], [-1, 0], [1, 0]];
-  for (const {x, y} of myCells) {
-    for (const [dx, dy] of dirs) {
-      const nx = x + dx, ny = y + dy;
-      if (nx < 0 || nx >= MAP_W || ny < 0 || ny >= MAP_H) continue;
-      const cell = map[ny][nx];
-      if (cell.ownerId === currentPlayer.id) continue;
-      // Не подсвечиваем союзников
-      if (cell.ownerId && playersInfo[cell.ownerId]?.faction === currentPlayer.faction) continue;
-      adjacentSet.add(`${nx},${ny}`);
-    }
-  }
-}
-
-    function getTerritoryBounds(ownerId) {
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, count = 0;
-      for (let y=0; y<MAP_H; y++) {
-        for (let x=0; x<MAP_W; x++) {
-          if (map[y][x].ownerId === ownerId) {
-            if (x < minX) minX = x; if (y < minY) minY = y;
-            if (x > maxX) maxX = x; if (y > maxY) maxY = y;
-            count++;
-          }
-        }
-      }
-      return { minX, minY, maxX, maxY, count, width: maxX-minX+1, height: maxY-minY+1 };
     }
 
     function rebuildTerritoryCache() {
-  territoryBoundsCache = {};
+      territoryBoundsCache = {};
+      const safeH = Math.min(MAP_H, map.length);
+      const safeW = Math.min(MAP_W, map[0]?.length || 0);
 
-  const safeH = Math.min(MAP_H, map.length);
-  const safeW = Math.min(MAP_W, map[0]?.length || 0);
+      // Собираем границы и одновременно заполняем карту владельцев для labelCache
+      const ownerMap = new Map(); // ownerId -> { minX, minY, maxX, maxY, count }
+      for (let y = 0; y < safeH; y++) {
+        for (let x = 0; x < safeW; x++) {
+          const owner = map[y][x].ownerId;
+          if (!owner) continue;
+          let b = ownerMap.get(owner);
+          if (!b) {
+            b = { minX: x, minY: y, maxX: x, maxY: y, count: 0 };
+            ownerMap.set(owner, b);
+          } else {
+            if (x < b.minX) b.minX = x;
+            if (y < b.minY) b.minY = y;
+            if (x > b.maxX) b.maxX = x;
+            if (y > b.maxY) b.maxY = y;
+          }
+          b.count++;
+        }
+      }
 
-  for (let y = 0; y < safeH; y++) {
-    for (let x = 0; x < safeW; x++) {
-      const owner = map[y][x].ownerId;
-      if (!owner) continue;
-      const b = territoryBoundsCache[owner];
-      if (!b) {
-        territoryBoundsCache[owner] = { minX: x, minY: y, maxX: x, maxY: y, count: 1 };
+      territoryBoundsCache = {};
+      for (const [owner, b] of ownerMap.entries()) {
+        territoryBoundsCache[owner] = { minX: b.minX, minY: b.minY, maxX: b.maxX, maxY: b.maxY, count: b.count };
+      }
+
+      // пересобираем myCells
+      myCells = [];
+      const isCommander = currentPlayer.hashtag && AVAILABLE_HASHTAGS.includes(currentPlayer.hashtag);
+      for (let y = 0; y < safeH; y++) {
+        for (let x = 0; x < safeW; x++) {
+          const owner = map[y][x].ownerId;
+          if (!owner) continue;
+          if (owner === currentPlayer.id) {
+            myCells.push({x, y});
+          } else if (isCommander && playersInfo[owner]?.faction === currentPlayer.faction) {
+            myCells.push({x, y});
+          }
+        }
+      }
+      if (myCells.length > 0) {
+        let sumX = 0, sumY = 0;
+        for (const cell of myCells) {
+          sumX += cell.x * CELL_SIZE + CELL_SIZE / 2;
+          sumY += cell.y * CELL_SIZE + CELL_SIZE / 2;
+        }
+        myCenterX = sumX / myCells.length;
+        myCenterY = sumY / myCells.length;
       } else {
-        if (x < b.minX) b.minX = x;
-        if (y < b.minY) b.minY = y;
-        if (x > b.maxX) b.maxX = x;
-        if (y > b.maxY) b.maxY = y;
-        b.count++;
+        myCenterX = 0;
+        myCenterY = 0;
+      }
+
+      // Построение кэша подписей (labelCache)
+      const factionBounds = {}; // baseHashtag -> bounds
+      const minorBounds = [];
+
+      for (const [owner, bounds] of ownerMap.entries()) {
+        const info = playersInfo[owner];
+        if (!info || !info.hashtag) continue;
+        if (AVAILABLE_HASHTAGS.includes(info.hashtag)) {
+          const base = info.hashtag;
+          if (!factionBounds[base]) {
+            factionBounds[base] = { minX: bounds.minX, minY: bounds.minY, maxX: bounds.maxX, maxY: bounds.maxY, count: 0, hashtag: base };
+          }
+          const fb = factionBounds[base];
+          if (bounds.minX < fb.minX) fb.minX = bounds.minX;
+          if (bounds.minY < fb.minY) fb.minY = bounds.minY;
+          if (bounds.maxX > fb.maxX) fb.maxX = bounds.maxX;
+          if (bounds.maxY > fb.maxY) fb.maxY = bounds.maxY;
+          fb.count += bounds.count;
+        } else {
+          minorBounds.push({ ...bounds, hashtag: info.hashtag, owner });
+        }
+      }
+
+      labelCache = {
+        commanders: Object.values(factionBounds),
+        minors: minorBounds
+      };
+    }
+
+    function rebuildOffscreen() {
+      if (!map || map.length !== MAP_H || !map[0] || map[0].length !== MAP_W) return;
+
+      if (!offscreen || offscreen.width !== MAP_W * CELL_SIZE || offscreen.height !== MAP_H * CELL_SIZE) {
+        offscreen = document.createElement('canvas');
+        offscreen.width = MAP_W * CELL_SIZE;
+        offscreen.height = MAP_H * CELL_SIZE;
+        offCtx = offscreen.getContext('2d');
+      }
+
+      offCtx.fillStyle = '#ffffff';
+      offCtx.fillRect(0, 0, MAP_W * CELL_SIZE, MAP_H * CELL_SIZE);
+
+      for (let y = 0; y < MAP_H; y++) {
+        for (let x = 0; x < MAP_W; x++) {
+          const cell = map[y][x];
+          if (cell.ownerId) {
+            const info = playersInfo[cell.ownerId];
+            offCtx.fillStyle = info ? info.color : '#cccccc';
+            offCtx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+          } else if (cell.hashtag) {
+            offCtx.fillStyle = '#b0b0b0';
+            offCtx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+          }
+        }
       }
     }
-  }
 
-  // пересобираем myCells
-  myCells = [];
-  const isCommander = currentPlayer.hashtag && AVAILABLE_HASHTAGS.includes(currentPlayer.hashtag);
-  for (let y = 0; y < safeH; y++) {
-    for (let x = 0; x < safeW; x++) {
-      const owner = map[y][x].ownerId;
-      if (!owner) continue;
-      if (owner === currentPlayer.id) {
-        myCells.push({x, y});
-      } else if (isCommander && playersInfo[owner]?.faction === currentPlayer.faction) {
-        myCells.push({x, y});
-      }
-    }
-  }
-    // пересчитываем центр масс своей территории
-  if (myCells.length > 0) {
-    let sumX = 0, sumY = 0;
-    for (const cell of myCells) {
-      sumX += cell.x * CELL_SIZE + CELL_SIZE / 2;
-      sumY += cell.y * CELL_SIZE + CELL_SIZE / 2;
-    }
-    myCenterX = sumX / myCells.length;
-    myCenterY = sumY / myCells.length;
-  } else {
-    myCenterX = 0;
-    myCenterY = 0;
-  }
-}
-
-function rebuildOffscreen() {
-  // Защита: если карта невалидна или размеры не совпадают – просто выходим
-  if (!map || map.length !== MAP_H || !map[0] || map[0].length !== MAP_W) return;
-
-  if (!offscreen || !offCtx || offscreen.width !== MAP_W * CELL_SIZE || offscreen.height !== MAP_H * CELL_SIZE) {
-    offscreen = document.createElement('canvas');
-    offscreen.width = MAP_W * CELL_SIZE;
-    offscreen.height = MAP_H * CELL_SIZE;
-    offCtx = offscreen.getContext('2d');
-  }
-
-  // Фон
-  offCtx.fillStyle = '#ffffff';
-  offCtx.fillRect(0, 0, MAP_W * CELL_SIZE, MAP_H * CELL_SIZE);
-
-  // Все клетки
-  for (let y = 0; y < MAP_H; y++) {
-    for (let x = 0; x < MAP_W; x++) {
-      const cell = map[y][x];
-      if (cell.ownerId) {
-        const info = playersInfo[cell.ownerId];
-        offCtx.fillStyle = info ? info.color : '#cccccc';
-        offCtx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-      } else if (cell.hashtag) {
-        offCtx.fillStyle = '#b0b0b0';
-        offCtx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-      }
-    }
-  }
-
-  offscreenDirty = false;
-}
-
-   function findClosestOwnCell(worldX, worldY) {
-    if (!currentPlayer.id || !currentPlayer.hashtag) return null;
-    // Используем кэш границ для ограничения области поиска
-    const bounds = territoryBoundsCache[currentPlayer.id];
-    let minY = 0, maxY = MAP_H - 1, minX = 0, maxX = MAP_W - 1;
-    if (bounds) {
+    function findClosestOwnCell(worldX, worldY) {
+      if (!currentPlayer.id || !currentPlayer.hashtag) return null;
+      const bounds = territoryBoundsCache[currentPlayer.id];
+      let minY = 0, maxY = MAP_H - 1, minX = 0, maxX = MAP_W - 1;
+      if (bounds) {
         minY = Math.max(0, bounds.minY - 1);
         maxY = Math.min(MAP_H - 1, bounds.maxY + 1);
         minX = Math.max(0, bounds.minX - 1);
         maxX = Math.min(MAP_W - 1, bounds.maxX + 1);
-    }
+      }
 
-    let bestCell = null, bestDist = Infinity;
-    for (let y = minY; y <= maxY; y++) {
+      let bestCell = null, bestDist = Infinity;
+      for (let y = minY; y <= maxY; y++) {
         for (let x = minX; x <= maxX; x++) {
-            if (map[y][x].ownerId === currentPlayer.id) {
-                const cx = x * CELL_SIZE + CELL_SIZE/2;
-                const cy = y * CELL_SIZE + CELL_SIZE/2;
-                const d = Math.hypot(cx - worldX, cy - worldY);
-                if (d < bestDist) {
-                    bestDist = d;
-                    bestCell = { x, y, worldX: cx, worldY: cy };
-                }
+          if (map[y][x].ownerId === currentPlayer.id) {
+            const cx = x * CELL_SIZE + CELL_SIZE/2;
+            const cy = y * CELL_SIZE + CELL_SIZE/2;
+            const d = Math.hypot(cx - worldX, cy - worldY);
+            if (d < bestDist) {
+              bestDist = d;
+              bestCell = { x, y, worldX: cx, worldY: cy };
             }
+          }
         }
+      }
+      return bestCell;
     }
-    return bestCell;
-}
 
     function screenToWorld(sx, sy) {
       const rect = canvas.getBoundingClientRect();
@@ -882,24 +884,23 @@ function rebuildOffscreen() {
     });
     document.getElementById('cancelAttackBtn').addEventListener('click', hideAttackPanel);
 
-       // ---------- МЕНЮ ----------
+    // ---------- МЕНЮ ----------
     menuBtn.addEventListener('click', () => {
-  if (currentPlayer.hashtag) {
-    menuStatus.textContent = 'Вы играете за: ' + currentPlayer.hashtag;
-    // Если это малый хештег, основную кнопку освобождения не показываем
-    if (!AVAILABLE_HASHTAGS.includes(currentPlayer.hashtag)) {
-      releaseBtn.style.display = 'none';
-    } else {
-      releaseBtn.style.display = 'inline-block';
-    }
-    chooseHashtagBtn.style.display = 'none';
-  } else {
-    menuStatus.textContent = 'Режим наблюдателя';
-    releaseBtn.style.display = 'none';
-    chooseHashtagBtn.style.display = 'inline-block';
-  }
-  menuPanel.style.display = 'block';
-});
+      if (currentPlayer.hashtag) {
+        menuStatus.textContent = 'Вы играете за: ' + currentPlayer.hashtag;
+        if (!AVAILABLE_HASHTAGS.includes(currentPlayer.hashtag)) {
+          releaseBtn.style.display = 'none';
+        } else {
+          releaseBtn.style.display = 'inline-block';
+        }
+        chooseHashtagBtn.style.display = 'none';
+      } else {
+        menuStatus.textContent = 'Режим наблюдателя';
+        releaseBtn.style.display = 'none';
+        chooseHashtagBtn.style.display = 'inline-block';
+      }
+      menuPanel.style.display = 'block';
+    });
 
     document.getElementById('closeMenuBtn').addEventListener('click', () => {
       menuPanel.style.display = 'none';
@@ -929,22 +930,20 @@ function rebuildOffscreen() {
     });
 
     chooseHashtagBtn.addEventListener('click', async () => {
-  menuPanel.style.display = 'none';
-  // Сначала принудительно обновим данные
-  await fetchState();
-  // Теперь откроем окно выбора с актуальными лайками
-  const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
-  showSelection(AVAILABLE_HASHTAGS, taken);
-});
+      menuPanel.style.display = 'none';
+      await fetchState();
+      const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
+      showSelection(AVAILABLE_HASHTAGS, taken);
+    });
 
     // ---------- СЕРВЕРНЫЕ ЗАПРОСЫ ----------
     function applyServerResponse(data, capturedCells) {
-      if (data.player && data.player.faction !== undefined) {
-  currentPlayer.faction = data.player.faction;
-}
-if (data.faction !== undefined) {
-  currentPlayer.faction = data.faction;
-}
+      if (data.faction !== undefined) {
+        currentPlayer.faction = data.faction;
+      } else if (data.player && data.player.faction !== undefined) {
+        currentPlayer.faction = data.player.faction;
+      }
+
       if (data.player) {
         currentPlayer.likes = data.player.likes;
         if (!currentPlayer.hashtag && data.player.hashtag) currentPlayer.hashtag = data.player.hashtag;
@@ -956,10 +955,8 @@ if (data.faction !== undefined) {
           document.getElementById('nicknameDisplay').textContent = 'Ник: ' + data.player.nickname;
           document.getElementById('nicknameDisplay').style.display = 'inline';
         }
-        if (data.player.faction !== undefined) currentPlayer.faction = data.player.faction;
       }
       if (data.playersInfo) playersInfo = data.playersInfo;
-      if (data.faction !== undefined) currentPlayer.faction = data.faction;
       if (data.worldW) MAP_W = data.worldW; if (data.worldH) MAP_H = data.worldH;
       if (data.leaderboard) leaderboard = data.leaderboard;
       if (data.hashtagLikes) hashtagLikes = data.hashtagLikes;
@@ -984,7 +981,6 @@ if (data.faction !== undefined) {
       if (capturedCells?.length && data.map && Array.isArray(data.map)) {
         animateCapture(capturedCells, data.map);
       } else if (data.map && Array.isArray(data.map)) {
-        // карта пришла, но без захвата – просто обновляем
         map = data.map;
         rebuildOffscreen();
         rebuildTerritoryCache();
@@ -1006,58 +1002,58 @@ if (data.faction !== undefined) {
           currentPlayer.spawnX = res.player.spawnX; currentPlayer.spawnY = res.player.spawnY;
           spectating = false;
           applyServerResponse(res, null);
-          hideSelection();   // сначала убираем меню
-          showLoadingScreen(); // потом показываем загрузку
-          startGame();        // запускаем загрузку мира
+          hideSelection();
+          showLoadingScreen();
+          startGame();
         } else alert(res.error);
       });
     }
 
     function attackCell(x, y, amount) {
-  if (attackInProgress) return;
-  attackInProgress = true;
-  fetch(`${SERVER_URL}/attack`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId: currentPlayer.id, x, y, amount })
-  })
-  .then(r => r.json())
-  .then(res => {
-    attackInProgress = false;
-    if (res.success) {
-      updateInfo(`Захвачено ${res.capturedCells.length} клеток, потрачено ${res.spent} лайков`);
-      applyServerResponse(res, res.capturedCells);
-    } else {
-      updateInfo(`Ошибка: ${res.error}`);
-      applyServerResponse(res, null);
+      if (attackInProgress) return;
+      attackInProgress = true;
+      fetch(`${SERVER_URL}/attack`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentPlayer.id, x, y, amount })
+      })
+      .then(r => r.json())
+      .then(res => {
+        attackInProgress = false;
+        if (res.success) {
+          updateInfo(`Захвачено ${res.capturedCells.length} клеток, потрачено ${res.spent} лайков`);
+          applyServerResponse(res, res.capturedCells);
+        } else {
+          updateInfo(`Ошибка: ${res.error}`);
+          applyServerResponse(res, null);
+        }
+      })
+      .catch(() => {
+        attackInProgress = false;
+        updateInfo('⚠️ Ошибка сети при атаке');
+      });
     }
-  })
-  .catch(() => {
-    attackInProgress = false;
-    updateInfo('⚠️ Ошибка сети при атаке');
-  });
-}
 
     function fetchState() {
-  if (!currentPlayer.id) return;
-  fetch(`${SERVER_URL}/sync`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId: currentPlayer.id })
-  })
-  .then(r => r.json())
-  .then(data => {
-    applyServerResponse(data, null);
-    if (isValidMap(data.map)) map = data.map;
-    if (data.worldW) MAP_W = data.worldW;
-    if (data.worldH) MAP_H = data.worldH;
-    rebuildOffscreen();
-    rebuildTerritoryCache();
-    updateAdjacentSet();
-    needsRedraw = true;
-  })
-  .catch(err => console.error('Ошибка sync:', err));
-}
+      if (!currentPlayer.id) return;
+      fetch(`${SERVER_URL}/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentPlayer.id })
+      })
+      .then(r => r.json())
+      .then(data => {
+        applyServerResponse(data, null);
+        if (isValidMap(data.map)) map = data.map;
+        if (data.worldW) MAP_W = data.worldW;
+        if (data.worldH) MAP_H = data.worldH;
+        rebuildOffscreen();
+        rebuildTerritoryCache();
+        updateAdjacentSet();
+        needsRedraw = true;
+      })
+      .catch(err => console.error('Ошибка sync:', err));
+    }
 
     function spectate() {
       fetch(`${SERVER_URL}/spectate`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:currentPlayer.id}) })
@@ -1078,7 +1074,7 @@ if (data.faction !== undefined) {
       document.getElementById('canvasContainer').style.pointerEvents = 'none';
       const listDiv = document.getElementById('hashtagList');
       const spectateBtn = document.getElementById('spectateBtn');
-        function buildList(likesData) {
+      function buildList(likesData) {
         listDiv.innerHTML = '';
         hashtags.forEach(tag => {
           const btn = document.createElement('button');
@@ -1088,7 +1084,6 @@ if (data.faction !== undefined) {
             btn.classList.add('taken');
             btn.disabled = true;
             btn.title = 'Хештег занят';
-            // Кнопка присоединения к фракции
             const joinBtn = document.createElement('button');
             joinBtn.textContent = '👥';
             joinBtn.style.marginLeft = '4px';
@@ -1097,8 +1092,8 @@ if (data.faction !== undefined) {
               e.stopPropagation();
               if (!currentPlayer.nickname) {
                 updateInfo('Сначала задайте ник');
-                  return;
-             }
+                return;
+              }
               fetch(`${SERVER_URL}/faction/join`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1106,24 +1101,24 @@ if (data.faction !== undefined) {
               })
               .then(r => r.json())
               .then(res => {
-  if (res.success) {
-    hideSelection();
-    factionBtn.click(); // автоматически открыть панель фракции
-  } else {
-     updateInfo(res.error); // или updateInfo(res.error)
-  }
-});
+                if (res.success) {
+                  hideSelection();
+                  factionBtn.click();
+                } else {
+                  updateInfo(res.error);
+                }
+              });
             };
             listDiv.appendChild(btn);
             listDiv.appendChild(joinBtn);
           } else {
             btn.onclick = () => {
-  if (!currentPlayer.nickname) {
-    updateInfo('Сначала задайте ник');
-    return;
-  }
-  claimHashtag(tag);
-};
+              if (!currentPlayer.nickname) {
+                updateInfo('Сначала задайте ник');
+                return;
+              }
+              claimHashtag(tag);
+            };
             listDiv.appendChild(btn);
           }
         });
@@ -1167,20 +1162,13 @@ if (data.faction !== undefined) {
       ctx.fillRect(0, 0, MAP_W * CELL_SIZE, MAP_H * CELL_SIZE);
 
       const startX = Math.max(0, Math.floor(viewX / CELL_SIZE));
-const startY = Math.max(0, Math.floor(viewY / CELL_SIZE));
-const endX = Math.min(
-  MAP_W,
-  startX + Math.ceil(canvas.width / (CELL_SIZE * zoom)) + 2
-);
-const endY = Math.min(
-  MAP_H,
-  startY + Math.ceil(canvas.height / (CELL_SIZE * zoom)) + 2
-);
-            // Вне анимации используем оффскрин, во время анимации рисуем клетки напрямую
+      const startY = Math.max(0, Math.floor(viewY / CELL_SIZE));
+      const endX = Math.min(MAP_W, startX + Math.ceil(canvas.width / (CELL_SIZE * zoom)) + 2);
+      const endY = Math.min(MAP_H, startY + Math.ceil(canvas.height / (CELL_SIZE * zoom)) + 2);
+
       if (!animating && offscreen) {
         ctx.drawImage(offscreen, 0, 0);
       } else {
-        // Рисуем клетки из map (только видимую область)
         for (let y = startY; y < endY; y++) {
           for (let x = startX; x < endX; x++) {
             const cell = map[y][x];
@@ -1195,7 +1183,6 @@ const endY = Math.min(
           }
         }
       }
-      
 
       if (!animating && currentPlayer.id && currentPlayer.hashtag && adjacentSet.size) {
         ctx.strokeStyle = '#FFD700';
@@ -1205,99 +1192,50 @@ const endY = Math.min(
           ctx.strokeRect(cx * CELL_SIZE, cy * CELL_SIZE, CELL_SIZE, CELL_SIZE);
         });
       }
-      // ---------- НОВЫЕ ПОДПИСИ (всегда работают) ----------
-if (!animating && currentPlayer.id) {
-  // Собираем границы для каждого ownerId
-  const boundsMap = {};
-  for (let y = 0; y < MAP_H; y++) {
-    for (let x = 0; x < MAP_W; x++) {
-      const owner = map[y][x].ownerId;
-      if (!owner) continue;
-      if (!boundsMap[owner]) {
-        boundsMap[owner] = { minX: x, minY: y, maxX: x, maxY: y, count: 0 };
+
+      // Подписи из кэша
+      if (!animating && labelCache) {
+        ctx.save();
+        for (const b of labelCache.commanders) {
+          const centerX = (b.minX + b.maxX) / 2 * CELL_SIZE + CELL_SIZE / 2;
+          const centerY = (b.minY + b.maxY) / 2 * CELL_SIZE + CELL_SIZE / 2;
+          const area = (b.maxX - b.minX + 1) * (b.maxY - b.minY + 1);
+          let fontSize = Math.max(12, Math.sqrt(area) * 2.2);
+          ctx.font = `bold ${fontSize}px "Courier New", monospace`;
+          ctx.fillStyle = 'rgba(0,0,0,0.6)';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(`#${b.hashtag}`, centerX, centerY - fontSize * 0.2);
+          ctx.font = `${fontSize * 0.6}px "Courier New", monospace`;
+          ctx.fillText(`${b.count}`, centerX, centerY + fontSize * 0.6);
+        }
+        for (const b of labelCache.minors) {
+          const centerX = (b.minX + b.maxX) / 2 * CELL_SIZE + CELL_SIZE / 2;
+          const centerY = (b.minY + b.maxY) / 2 * CELL_SIZE + CELL_SIZE / 2;
+          const area = (b.maxX - b.minX + 1) * (b.maxY - b.minY + 1);
+          let fontSize = Math.max(10, Math.sqrt(area) * 1.8);
+          ctx.font = `bold ${fontSize}px "Courier New", monospace`;
+          ctx.fillStyle = 'rgba(0,0,0,0.45)';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(`#${b.hashtag}`, centerX, centerY);
+        }
+        ctx.restore();
       }
-      const b = boundsMap[owner];
-      if (x < b.minX) b.minX = x;
-      if (y < b.minY) b.minY = y;
-      if (x > b.maxX) b.maxX = x;
-      if (y > b.maxY) b.maxY = y;
-      b.count++;
-    }
-  }
 
-  // Определяем фракции (для объединения территорий командиров)
-  const factionBounds = {}; // baseHashtag -> bounds
-  const minorBounds = [];   // малые хештеги (подчинённые)
-
-  for (const [owner, bounds] of Object.entries(boundsMap)) {
-    const info = playersInfo[owner];
-    if (!info || !info.hashtag) continue;
-    if (AVAILABLE_HASHTAGS.includes(info.hashtag)) {
-      // Командир – объединяем с его фракцией
-      const base = info.hashtag; // фракция = его хештег
-      if (!factionBounds[base]) {
-        factionBounds[base] = { ...bounds, hashtag: base, count: 0 };
-      }
-      // расширяем bounding box фракции
-      const fb = factionBounds[base];
-      if (bounds.minX < fb.minX) fb.minX = bounds.minX;
-      if (bounds.minY < fb.minY) fb.minY = bounds.minY;
-      if (bounds.maxX > fb.maxX) fb.maxX = bounds.maxX;
-      if (bounds.maxY > fb.maxY) fb.maxY = bounds.maxY;
-      fb.count += bounds.count;
-    } else {
-      // Подчинённый (малый хештег)
-      minorBounds.push({ ...bounds, hashtag: info.hashtag, owner });
-    }
-  }
-
-  // Отрисовываем подписи командиров
-  ctx.save();
-  for (const base in factionBounds) {
-    const b = factionBounds[base];
-    const centerX = (b.minX + b.maxX) / 2 * CELL_SIZE + CELL_SIZE / 2;
-    const centerY = (b.minY + b.maxY) / 2 * CELL_SIZE + CELL_SIZE / 2;
-    const area = (b.maxX - b.minX + 1) * (b.maxY - b.minY + 1);
-    let fontSize = Math.max(12, Math.sqrt(area) * 2.2);
-    ctx.font = `bold ${fontSize}px "Courier New", monospace`;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(`#${b.hashtag}`, centerX, centerY - fontSize * 0.2);
-    ctx.font = `${fontSize * 0.6}px "Courier New", monospace`;
-    ctx.fillText(`${b.count}`, centerX, centerY + fontSize * 0.6);
-  }
-
-  // Отрисовываем подписи подчинённых
-  for (const b of minorBounds) {
-    const centerX = (b.minX + b.maxX) / 2 * CELL_SIZE + CELL_SIZE / 2;
-    const centerY = (b.minY + b.maxY) / 2 * CELL_SIZE + CELL_SIZE / 2;
-    const area = (b.maxX - b.minX + 1) * (b.maxY - b.minY + 1);
-    let fontSize = Math.max(10, Math.sqrt(area) * 1.8); // чуть меньше
-    ctx.font = `bold ${fontSize}px "Courier New", monospace`;
-    ctx.fillStyle = 'rgba(0,0,0,0.45)';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(`#${b.hashtag}`, centerX, centerY);
-  }
-  ctx.restore();
-  ctx.textAlign = 'start'; // сброс
-}
-      // Штриховка и пунктир для подчинённых
+      // Штриховка подчинённых (только видимая область)
       for (let y = startY; y < endY; y++) {
-       for (let x = startX; x < endX; x++) {
+        for (let x = startX; x < endX; x++) {
           const cell = map[y][x];
           if (cell.ownerId) {
             const owner = playersInfo[cell.ownerId];
             if (owner && owner.hashtag && !AVAILABLE_HASHTAGS.includes(owner.hashtag)) {
-              // Подчинённый
               ctx.save();
               ctx.strokeStyle = 'black';
               ctx.lineWidth = 1 / zoom;
               ctx.setLineDash([3 / zoom, 2 / zoom]);
               ctx.strokeRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-              ctx.setLineDash([]); // сброс
-              // Штриховка (диагональные линии)
+              ctx.setLineDash([]);
               ctx.beginPath();
               ctx.strokeStyle = 'rgba(0,0,0,0.3)';
               ctx.lineWidth = 0.5 / zoom;
@@ -1313,42 +1251,42 @@ if (!animating && currentPlayer.id) {
           }
         }
       }
+
       ctx.restore();
-    if (currentPlayer.id && currentPlayer.hashtag && myCells.length > 0) {
-    const arrowX = canvas.width / 2;
-    const arrowY = canvas.height - 60;
-    const worldX = arrowX / zoom + viewX;
-    const worldY = arrowY / zoom + viewY;
-    // Ближайшая «точка» – центр масс своей территории
-    const closestX = myCenterX;
-    const closestY = myCenterY;
-    const dx = closestX - worldX;
-    const dy = closestY - worldY;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    if (len > 1) {
-        const angle = Math.atan2(dy, dx);
-        ctx.save();
-        ctx.translate(arrowX, arrowY);
-        ctx.rotate(angle);
-        ctx.fillStyle = '#FFD700';
-        ctx.shadowColor = '#000';
-        ctx.shadowBlur = 6;
-        ctx.beginPath();
-        ctx.moveTo(12, 0);
-        ctx.lineTo(-8, -8);
-        ctx.lineTo(-8, 8);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-    }
-}
-            // Меню доступно всегда, даже без ника
+
+      if (currentPlayer.id && currentPlayer.hashtag && myCells.length > 0) {
+        const arrowX = canvas.width / 2;
+        const arrowY = canvas.height - 60;
+        const worldX = arrowX / zoom + viewX;
+        const worldY = arrowY / zoom + viewY;
+        const closestX = myCenterX;
+        const closestY = myCenterY;
+        const dx = closestX - worldX;
+        const dy = closestY - worldY;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len > 1) {
+          const angle = Math.atan2(dy, dx);
+          ctx.save();
+          ctx.translate(arrowX, arrowY);
+          ctx.rotate(angle);
+          ctx.fillStyle = '#FFD700';
+          ctx.shadowColor = '#000';
+          ctx.shadowBlur = 6;
+          ctx.beginPath();
+          ctx.moveTo(12, 0);
+          ctx.lineTo(-8, -8);
+          ctx.lineTo(-8, 8);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+
       if (currentPlayer.id) {
         menuBtn.style.display = 'block';
       } else {
         menuBtn.style.display = 'none';
       }
-      // Остальные кнопки только после полной инициализации
       if (currentPlayer.id && currentPlayer.nickname && (currentPlayer.hashtag || currentPlayer.faction)) {
         factionBtn.style.display = 'block';
         chatToggleBtn.style.display = 'block';
@@ -1378,87 +1316,85 @@ if (!animating && currentPlayer.id) {
 
     function updateInfo(text) { document.getElementById('info').textContent = text; }
 
-  function animateCapture(cells, serverMap) {
-  // Мгновенное обновление 
-  if (!Array.isArray(serverMap)) {
-    animating = false;
-    return;
-  }
-  // Сразу применяем новую карту
-  map = serverMap;
-  rebuildOffscreen();
-  rebuildTerritoryCache();
-  updateAdjacentSet();
-  needsRedraw = true;
-  updateInfo(`Лайков: ${currentPlayer.likes}`);
-  animating = false;
-}
-
-function showLoadingScreen() {
-  document.getElementById('loadingScreen').style.display = 'flex';
-  document.getElementById('loadingBar').style.width = '0%';
-  let progress = 0;
-  window.loadingInterval = setInterval(() => {
-    progress += Math.random() * 15;
-    if (progress > 90) progress = 90;
-    document.getElementById('loadingBar').style.width = progress + '%';
-  }, 500);
-}
-
-function hideLoadingScreen() {
-  clearInterval(window.loadingInterval);
-  document.getElementById('loadingBar').style.width = '100%';
-  setTimeout(() => {
-    document.getElementById('loadingScreen').style.display = 'none';
-  }, 300);
-}
-
-function startGame() {
-  if (!window.stateInterval) {
-    showLoadingScreen();
-    resizeCanvas();
-  }
-  fetch(`${SERVER_URL}/map`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId: currentPlayer.id })
-  })
-  .then(r => r.json())
-  .then(data => {
-    if (data.map) map = data.map;
-    if (data.worldW) MAP_W = data.worldW;
-    if (data.worldH) MAP_H = data.worldH;
-    if (!offscreen || offscreen.width !== MAP_W * CELL_SIZE || offscreen.height !== MAP_H * CELL_SIZE) {
-      offscreen = document.createElement('canvas');
-      offscreen.width = MAP_W * CELL_SIZE;
-      offscreen.height = MAP_H * CELL_SIZE;
-      offCtx = offscreen.getContext('2d');
+    function animateCapture(cells, serverMap) {
+      if (!Array.isArray(serverMap)) {
+        animating = false;
+        return;
+      }
+      map = serverMap;
+      rebuildOffscreen();
+      rebuildTerritoryCache();
+      updateAdjacentSet();
+      needsRedraw = true;
+      updateInfo(`Лайков: ${currentPlayer.likes}`);
+      animating = false;
     }
-    rebuildOffscreen();
-    rebuildTerritoryCache();
-    updateAdjacentSet();
-    if (!window.stateInterval) hideLoadingScreen();
-    needsRedraw = true;
-    updateInfo(`Лайков: ${currentPlayer.likes}`);
-    fetchState();
-    if (!window.stateInterval) {
-      window.stateInterval = setInterval(fetchState, 10000);
-      window.chatInterval = setInterval(fetchChatMessages, 3000);
-      window.addEventListener('beforeunload', () => {
-        clearInterval(window.stateInterval);
-        clearInterval(window.chatInterval);
+
+    function showLoadingScreen() {
+      document.getElementById('loadingScreen').style.display = 'flex';
+      document.getElementById('loadingBar').style.width = '0%';
+      let progress = 0;
+      window.loadingInterval = setInterval(() => {
+        progress += Math.random() * 15;
+        if (progress > 90) progress = 90;
+        document.getElementById('loadingBar').style.width = progress + '%';
+      }, 500);
+    }
+
+    function hideLoadingScreen() {
+      clearInterval(window.loadingInterval);
+      document.getElementById('loadingBar').style.width = '100%';
+      setTimeout(() => {
+        document.getElementById('loadingScreen').style.display = 'none';
+      }, 300);
+    }
+
+    function startGame() {
+      if (!window.stateInterval) {
+        showLoadingScreen();
+        resizeCanvas();
+      }
+      fetch(`${SERVER_URL}/map`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentPlayer.id })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.map) map = data.map;
+        if (data.worldW) MAP_W = data.worldW;
+        if (data.worldH) MAP_H = data.worldH;
+        if (!offscreen || offscreen.width !== MAP_W * CELL_SIZE || offscreen.height !== MAP_H * CELL_SIZE) {
+          offscreen = document.createElement('canvas');
+          offscreen.width = MAP_W * CELL_SIZE;
+          offscreen.height = MAP_H * CELL_SIZE;
+          offCtx = offscreen.getContext('2d');
+        }
+        rebuildOffscreen();
+        rebuildTerritoryCache();
+        updateAdjacentSet();
+        if (!window.stateInterval) hideLoadingScreen();
+        needsRedraw = true;
+        updateInfo(`Лайков: ${currentPlayer.likes}`);
+        fetchState();
+        if (!window.stateInterval) {
+          window.stateInterval = setInterval(fetchState, 10000);
+          window.chatInterval = setInterval(fetchChatMessages, 3000);
+          window.addEventListener('beforeunload', () => {
+            clearInterval(window.stateInterval);
+            clearInterval(window.chatInterval);
+          });
+        }
+        fetchChatMessages();
+      })
+      .catch(err => {
+        if (!window.stateInterval) hideLoadingScreen();
+        updateInfo('⚠️ Ошибка загрузки мира: ' + err.message);
       });
     }
-    fetchChatMessages();
-  })
-  .catch(err => {
-    if (!window.stateInterval) hideLoadingScreen();
-    updateInfo('⚠️ Ошибка загрузки мира: ' + err.message);
-  });
-}
 
     // ---------- ИНИЦИАЛИЗАЦИЯ ----------
-    startRenderLoop();   // запускаем цикл отрисовки сразу
+    startRenderLoop();
     vkBridge.send('VKWebAppInit')
       .then(() => vkBridge.send('VKWebAppGetUserInfo'))
       .then(data => {
@@ -1474,8 +1410,7 @@ function startGame() {
         if (!r.ok) throw new Error(`Ошибка сервера: ${r.status}`);
         return r.json();
       })
-            .then(state => {
-        // всегда запоминаем базовые данные
+      .then(state => {
         if (state.player) {
           currentPlayer.likes = state.player.likes;
           currentPlayer.hashtag = state.player.hashtag || null;
@@ -1503,13 +1438,11 @@ function startGame() {
           if (!timerInterval) timerInterval = setInterval(updateTimer, 1000);
         }
         currentPlayer.color = state.player?.color || '#cccccc';
-        currentPlayer.faction = state.faction;   // ← сохраняем фракцию
+        currentPlayer.faction = state.faction;
 
-        // Если у игрока уже есть хештег – сразу стартуем игру
         if (currentPlayer.hashtag) {
           startGame();
         } else {
-          // Показываем меню выбора (без карты)
           const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
           showSelection(AVAILABLE_HASHTAGS, taken);
           updateInfo('Выберите хештег и ник');
@@ -1521,8 +1454,6 @@ function startGame() {
         resizeCanvas();
         needsRedraw = true;
       });
-
-    
   </script>
 </body>
 </html>
