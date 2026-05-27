@@ -145,7 +145,7 @@
     const CELL_SIZE = 8;
     let MAP_W = 320;
     let MAP_H = 180;
-    const SERVER_URL = 'https://019e6978-448a-7470-83ce-2265f4c421c5.tunnel4.com';
+    const SERVER_URL = ' https://019e6978-448a-7470-83ce-2265f4c421c5.tunnel4.com';
 
     const canvas = document.getElementById('gameCanvas');
     const AVAILABLE_HASHTAGS = [
@@ -1429,14 +1429,16 @@
         needsRedraw = true;
         updateInfo(`Лайков: ${currentPlayer.likes}`);
         fetchState();
-        if (!window.stateInterval) {
-          window.stateInterval = setInterval(fetchState, 10000);
-          window.chatInterval = setInterval(fetchChatMessages, 3000);
-          window.addEventListener('beforeunload', () => {
-            clearInterval(window.stateInterval);
-            clearInterval(window.chatInterval);
-          });
-        }
+if (window.stateInterval) clearInterval(window.stateInterval);
+if (window.chatInterval) clearInterval(window.chatInterval);
+
+window.stateInterval = setInterval(fetchState, 10000);
+window.chatInterval = setInterval(fetchChatMessages, 5000); // 5 секунд вместо 3
+
+window.addEventListener('beforeunload', () => {
+  clearInterval(window.stateInterval);
+  clearInterval(window.chatInterval);
+});
         fetchChatMessages();
       })
       .catch(err => {
