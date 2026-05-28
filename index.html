@@ -423,13 +423,17 @@
       }
     });
 
-    document.addEventListener('visibilitychange', () => {
+   document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
-    if (window.chatInterval) clearInterval(window.chatInterval);
+    if (window.chatInterval) {
+      clearInterval(window.chatInterval);
+      window.chatInterval = null;
+    }
   } else {
-    // возобновляем опрос, только если чат был запущен
+    // возобновляем опрос, только если игрок уже в игре
     if (currentPlayer.id && (currentPlayer.hashtag || currentPlayer.faction)) {
-      window.chatInterval = setInterval(fetchChatMessages, 10000);
+      if (window.chatInterval) clearInterval(window.chatInterval);
+      window.chatInterval = setInterval(fetchChatMessages, 10000); // 10 секунд
     }
   }
 });
@@ -1482,7 +1486,7 @@
         if (window.chatInterval) clearInterval(window.chatInterval);
 
         window.stateInterval = setInterval(fetchState, 10000);
-        window.chatInterval = setInterval(fetchChatMessages, 5000);
+        window.chatInterval = setInterval(fetchChatMessages, 10000);
 
         window.addEventListener('beforeunload', () => {
           clearInterval(window.stateInterval);
