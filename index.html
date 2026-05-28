@@ -175,6 +175,7 @@
       'HonkaiStarRail', 'WutheringWaves', 'BrownDust2', 'Neverness_to_Everness'
     ];
     const ctx = canvas.getContext('2d');
+    resizeCanvas();
 
     function resizeCanvas() {
       const container = document.getElementById('canvasContainer');
@@ -1101,6 +1102,7 @@
             currentPlayer.color = res.player.color;
             currentPlayer.spawnX = res.player.spawnX; currentPlayer.spawnY = res.player.spawnY;
             spectating = false;
+            resizeCanvas();
             applyServerResponse(res, null);   // карта уже пришла и обновлена
             hideSelection();
             // вместо startGame() просто обновим интервалы, карта уже готова
@@ -1485,9 +1487,6 @@
     function startGame() {
       showLoadingScreen();
       resizeCanvas();
-      if (!window.stateInterval) {
-        showLoadingScreen();
-      }
       fetch(`${SERVER_URL}/map`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1532,6 +1531,7 @@
     }
 
     // ---------- ИНИЦИАЛИЗАЦИЯ ----------
+    showLoadingScreen();
     startRenderLoop();
     vkBridge.send('VKWebAppInit')
       .then(() => vkBridge.send('VKWebAppGetUserInfo'))
@@ -1589,6 +1589,7 @@
           showSelection(AVAILABLE_HASHTAGS, taken);
           updateInfo('Выберите хештег и ник');
         }
+        hideLoadingScreen();
       })
       .catch(err => {
         updateInfo('⚠️ Нет связи с сервером: ' + err.message);
