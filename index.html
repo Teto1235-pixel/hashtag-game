@@ -1081,16 +1081,21 @@
     function claimHashtag(hashtag) {
       fetch(`${SERVER_URL}/claim`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:currentPlayer.id, hashtag}) })
       .then(r=>r.json()).then(res=>{
-        if (res.success) {
-          currentPlayer.faction = hashtag; 
-          currentPlayer.color = res.player.color;
-          currentPlayer.spawnX = res.player.spawnX; currentPlayer.spawnY = res.player.spawnY;
-          spectating = false;
-          applyServerResponse(res, null);
-          hideSelection();
-          showLoadingScreen();
-          startGame();
-        } else alert(res.error);
+          if (res.success) {
+            currentPlayer.faction = hashtag; 
+            currentPlayer.color = res.player.color;
+            currentPlayer.spawnX = res.player.spawnX; currentPlayer.spawnY = res.player.spawnY;
+            spectating = false;
+            applyServerResponse(res, null);   // карта уже пришла и обновлена
+            hideSelection();
+            // вместо startGame() просто обновим интервалы, карта уже готова
+            if (window.stateInterval) clearInterval(window.stateInterval);
+            if (window.chatInterval) clearInterval(window.chatInterval);
+            window.stateInterval = setInterval(fetchState, 10000);
+            window.chatInterval = setInterval(fetchChatMessages, 10000);
+            updateInfo(`Лайков: ${currentPlayer.likes}`);
+            needsRedraw = true;
+          } else alert(res.error);
       });
     }
 
@@ -1453,6 +1458,7 @@
     }
 
     function startGame() {
+      showLoadingScreen();
       if (!window.stateInterval) {
         showLoadingScreen();
         resizeCanvas();
