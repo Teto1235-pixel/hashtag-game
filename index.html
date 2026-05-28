@@ -1531,8 +1531,8 @@
     }
 
     // ---------- ИНИЦИАЛИЗАЦИЯ ----------
-    showLoadingScreen();
     startRenderLoop();
+    showLoadingScreen();
     vkBridge.send('VKWebAppInit')
       .then(() => vkBridge.send('VKWebAppGetUserInfo'))
       .then(data => {
