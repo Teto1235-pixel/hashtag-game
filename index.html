@@ -220,6 +220,8 @@
     let renderLoopRunning = false;
 
     let currentMapVersion = 0;
+    let lastMessageId = null;
+    let factionLastMsgId = null;
 
     // UI элементы
     const attackPanel = document.getElementById('attackPanel');
@@ -363,29 +365,55 @@
         const res = await fetch(`${SERVER_URL}/chat/get`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({})
+          body: JSON.stringify({ afterId: lastMessageId })   // null при первом вызове
         }).then(r => r.json());
+
         if (res.messages && res.messages.length > 0) {
-          chatMessages.innerHTML = '';
+          // Определяем максимальный timestamp среди новых сообщений
+          let maxTs = 0;
           for (const msg of res.messages) {
+            if (msg.timestamp > maxTs) maxTs = msg.timestamp;
+            if (msg.id === lastMessageId) continue;          // защита от дубля
             const div = document.createElement('div');
             div.textContent = `${msg.nickname}: ${msg.text}`;
             chatMessages.appendChild(div);
+            lastMessageId = msg.id;
           }
           chatMessages.scrollTop = chatMessages.scrollHeight;
 
-          const newestTimestamp = res.messages[res.messages.length - 1].timestamp;
-          newestMessageTimestamp = newestTimestamp;
+          newestMessageTimestamp = maxTs;
 
           if (chatPanel.style.display === 'block') {
             lastReadTimestamp = newestMessageTimestamp;
             document.getElementById('chatUnreadDot').style.display = 'none';
-          } else if (newestTimestamp > lastReadTimestamp) {
+          } else if (newestMessageTimestamp > lastReadTimestamp) {
             document.getElementById('chatUnreadDot').style.display = 'block';
           }
         }
       } catch (e) {
         console.error('Ошибка чата:', e);
+      }
+    }
+    async function loadFactionChat(baseHashtag) {
+      const container = document.getElementById('factionChatMessages');
+      if (!container) return;
+      try {
+        const res = await fetch(`${SERVER_URL}/faction/chat/get`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ baseHashtag, afterId: factionLastMsgId })
+        }).then(r => r.json());
+        if (res.messages && res.messages.length > 0) {
+          for (const msg of res.messages) {
+            const div = document.createElement('div');
+            div.textContent = `${msg.nickname}: ${msg.text}`;
+            container.appendChild(div);
+            factionLastMsgId = msg.id;
+          }
+          container.scrollTop = container.scrollHeight;
+        }
+      } catch (e) {
+        console.error('Ошибка загрузки чата фракции:', e);
       }
     }
 
@@ -436,6 +464,18 @@
         } catch (err) {
           updateInfo('Ошибка сети');
         }
+              } else if (btn.id === 'factionChatSendBtn') {
+        const input = document.getElementById('factionChatInput');
+        const text = input.value.trim();
+        if (!text) return;
+        const baseHashtag = factionContent.dataset.base; // надо сохранить при открытии
+        await fetch(`${SERVER_URL}/faction/chat/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentPlayer.id, baseHashtag, text })
+        });
+        input.value = '';
+        loadFactionChat(baseHashtag);
       }
     });
 
@@ -496,8 +536,14 @@
         const myMinor = f.minors.find(m => m.occupiedBy === currentPlayer.id);
         if (myMinor) html += `<button id="releaseMinorBtn">Освободить хештег</button>`;
       }
-      factionContent.innerHTML = html;
-      factionPanel.style.display = 'block';
+      html += `<div id="factionChatMessages" style="height:150px; overflow-y:auto; background:#f0f0f0; margin-top:10px; padding:4px; font-size:12px;"></div>`;
+  html += `<input type="text" id="factionChatInput" placeholder="Сообщение фракции..." style="width:80%; padding:4px; margin-top:4px;">`;
+  html += `<button id="factionChatSendBtn" style="padding:4px 10px;">Отправить</button>`;
+  
+  factionContent.dataset.base = res.baseHashtag;
+  factionContent.innerHTML = html;
+  factionPanel.style.display = 'block';
+  loadFactionChat(res.baseHashtag);  
 
       const releaseMinorBtnLocal = document.getElementById('releaseMinorBtn');
       if (releaseMinorBtnLocal) {
@@ -1231,13 +1277,19 @@
             btn.textContent = btnText;
             btn.onclick = () => {
               if (!currentPlayer.nickname) { updateInfo('Сначала задайте ник'); return; }
-              if (myBlocked) {
+              if (currentPlayer.blockedUntil && currentPlayer.blockedUntil > Date.now()) {
                 const left = Math.ceil((currentPlayer.blockedUntil - Date.now()) / 60000);
-                updateInfo(`Хештег заблокирован ещё ${left} мин.`);
+                updateInfo(`Вы заблокированы ещё ${left} мин.`);
                 return;
               }
               claimHashtag(tag);
             };
+            // Показываем оставшееся время блокировки, если хештег занят игроком с блокировкой
+          const owner = Object.values(playersInfo).find(p => p.hashtag === tag);
+            if (owner && owner.blockedUntil && owner.blockedUntil > Date.now()) {
+              const mins = Math.ceil((owner.blockedUntil - Date.now()) / 60000);
+              btnText = `#${tag} (осв. ${mins}м)`;
+            }
             row.appendChild(btn);
           }
           listDiv.appendChild(row);
