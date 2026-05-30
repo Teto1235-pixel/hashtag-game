@@ -221,7 +221,7 @@
 
     let currentMapVersion = 0;
     let lastMessageId = null;
-    let factionLastMsgId = null;
+    let factionChatStates = {};
 
     // UI элементы
     const attackPanel = document.getElementById('attackPanel');
@@ -395,27 +395,40 @@
       }
     }
     async function loadFactionChat(baseHashtag) {
-      const container = document.getElementById('factionChatMessages');
-      if (!container) return;
-      try {
-        const res = await fetch(`${SERVER_URL}/faction/chat/get`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ baseHashtag, afterId: factionLastMsgId })
-        }).then(r => r.json());
-        if (res.messages && res.messages.length > 0) {
-          for (const msg of res.messages) {
-            const div = document.createElement('div');
-            div.textContent = `${msg.nickname}: ${msg.text}`;
-            container.appendChild(div);
-            factionLastMsgId = msg.id;
-          }
-          container.scrollTop = container.scrollHeight;
-        }
-      } catch (e) {
-        console.error('Ошибка загрузки чата фракции:', e);
+  const container = document.getElementById('factionChatMessages');
+  if (!container) return;
+
+  // Сохраняем состояние для текущей фракции
+  if (!factionChatStates[baseHashtag]) {
+    factionChatStates[baseHashtag] = { lastMsgId: null, html: '' };
+  }
+  const state = factionChatStates[baseHashtag];
+  
+  // Восстанавливаем сохранённый HTML, если он есть
+  container.innerHTML = state.html;
+
+  try {
+    const res = await fetch(`${SERVER_URL}/faction/chat/get`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ baseHashtag, afterId: state.lastMsgId })
+    }).then(r => r.json());
+
+    if (res.messages && res.messages.length > 0) {
+      for (const msg of res.messages) {
+        const div = document.createElement('div');
+        div.textContent = `${msg.nickname}: ${msg.text}`;
+        container.appendChild(div);
+        state.lastMsgId = msg.id;
       }
+      container.scrollTop = container.scrollHeight;
+      // Обновляем сохранённый HTML
+      state.html = container.innerHTML;
     }
+  } catch (e) {
+    console.error('Ошибка загрузки чата фракции:', e);
+  }
+}
 
     // --- Фракция (делегирование событий) ---
     factionContent.addEventListener('click', async (e) => {
@@ -464,18 +477,36 @@
         } catch (err) {
           updateInfo('Ошибка сети');
         }
-              } else if (btn.id === 'factionChatSendBtn') {
+      } else if (btn.id === 'factionChatSendBtn') {
         const input = document.getElementById('factionChatInput');
         const text = input.value.trim();
         if (!text) return;
-        const baseHashtag = factionContent.dataset.base; // надо сохранить при открытии
-        await fetch(`${SERVER_URL}/faction/chat/send`, {
+        const baseHashtag = factionContent.dataset.base;
+        
+        // Отправка на сервер
+        const resp = await fetch(`${SERVER_URL}/faction/chat/send`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: currentPlayer.id, baseHashtag, text })
         });
+        if (!resp.ok) return;
+        
         input.value = '';
-        loadFactionChat(baseHashtag);
+        
+        // Добавляем сообщение сразу в контейнер и обновляем состояние
+        const container = document.getElementById('factionChatMessages');
+        const nickname = currentPlayer.nickname || 'Аноним';
+        const div = document.createElement('div');
+        div.textContent = `${nickname}: ${text}`;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+        
+        // Обновляем кэш состояния
+        if (!factionChatStates[baseHashtag]) {
+          factionChatStates[baseHashtag] = { lastMsgId: null, html: '' };
+        }
+        factionChatStates[baseHashtag].html = container.innerHTML;
+        // lastMsgId не обновляем, так как сервер сам присвоит ID при следующей загрузке
       }
     });
 
@@ -543,7 +574,13 @@
   factionContent.dataset.base = res.baseHashtag;
   factionContent.innerHTML = html;
   factionPanel.style.display = 'block';
-  loadFactionChat(res.baseHashtag);  
+  
+  // Восстанавливаем сохранённый HTML чата, если он был
+  const chatState = factionChatStates[res.baseHashtag];
+  if (chatState && chatState.html) {
+    document.getElementById('factionChatMessages').innerHTML = chatState.html;
+  }
+  loadFactionChat(res.baseHashtag);
 
       const releaseMinorBtnLocal = document.getElementById('releaseMinorBtn');
       if (releaseMinorBtnLocal) {
@@ -582,8 +619,19 @@
     });
 
     document.getElementById('closeFactionBtn').addEventListener('click', () => {
-      factionPanel.style.display = 'none';
-    });
+  // Сохраняем текущее состояние чата перед закрытием
+  const base = factionContent.dataset.base;
+  if (base) {
+    const container = document.getElementById('factionChatMessages');
+    if (container) {
+      if (!factionChatStates[base]) {
+        factionChatStates[base] = { lastMsgId: null, html: '' };
+      }
+      factionChatStates[base].html = container.innerHTML;
+    }
+  }
+  factionPanel.style.display = 'none';
+});
 
     // ---------- ГРАНИЦЫ КАМЕРЫ ----------
     function clampCamera() {
