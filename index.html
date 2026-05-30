@@ -14,7 +14,7 @@
     }
     #canvasContainer { width: 100%; height: 100vh; display: flex; justify-content: center; align-items: center; }
     canvas { display: block; width: 100%; height: 100%; touch-action: none; }
-    #info, #legend, #menuBtn, #leaderboard, #menuPanel, #selection, #attackPanel, #gameover { position: absolute; z-index: 10; }
+    #info, #legend, #menuBtn, #leaderboard, #menuPanel, #selection, #attackPanel, #gameover, #gameEndScreen { position: absolute; z-index: 10; }
     #info { top:10px; left:10px; background:rgba(255,255,255,0.9); padding:4px 8px; border-radius:4px; }
     #legend { bottom:20px; left:20px; background:rgba(255,255,255,0.9); padding:8px 12px; border-radius:8px; display:none; align-items:center; gap:8px; }
     #legendColor { width:20px; height:20px; border:1px solid #333; }
@@ -31,6 +31,8 @@
     #selection button.taken { background:#ffcccc; color:#900; cursor:not-allowed; text-decoration:line-through; }
     #attackPanel { display:none; position:absolute; bottom:20px; left:50%; transform:translateX(-50%); background:white; border:1px solid #ccc; padding:15px; z-index:20; text-align:center; }
     #gameover { display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:100; justify-content:center; align-items:center; flex-direction:column; color:white; font-size:24px; }
+    #gameEndScreen { display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:100; justify-content:center; align-items:center; flex-direction:column; color:white; font-size:24px; }
+    #gameEndScreen .leaderboard { margin-top:20px; font-size:18px; }
     button { margin:5px; padding:8px 12px; cursor:pointer; font-family:'Courier New',monospace; }
     input[type=range] { width:200px; }
     @media (hover: none) and (pointer: coarse) { input[type=range] { width: 160px; height: 30px; } }
@@ -53,6 +55,27 @@
     }
     .faction-layout {
       flex-wrap: nowrap;
+    }
+
+    /* Книга инструкции */
+    #infoOverlay {
+      display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.7); z-index: 200;
+    }
+    #infoBook {
+      display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 90%; max-width: 500px; max-height: 80vh; background: #fafafa;
+      border-radius: 10px; box-shadow: 0 0 20px #000; z-index: 201;
+      overflow-y: auto; padding: 20px; font-size: 14px; color: #222;
+    }
+    #infoBook h2 { text-align: center; margin-top: 0; }
+    #infoBook .toc { margin-bottom: 20px; }
+    #infoBook .toc a { color: #4d79ff; text-decoration: none; display: block; margin: 4px 0; }
+    #infoBook .section { margin-bottom: 30px; }
+    #infoBook .section h3 { border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+    #infoBook .close-btn {
+      position: absolute; top: 10px; right: 15px;
+      background: none; border: none; font-size: 24px; cursor: pointer; color: #555;
     }
   </style>
 </head>
@@ -114,6 +137,7 @@
     </p>
     <hr>
     <button id="spectateBtn">👀 Наблюдать</button>
+    <button id="infoBtn">📖 Информация об игре</button>
   </div>
 
   <div id="attackPanel">
@@ -133,6 +157,12 @@
     <div>💔 Вы потеряли все клетки!</div>
     <button id="gameoverSpectate">Наблюдать</button>
   </div>
+  <div id="gameEndScreen">
+    <div>🏆 Игра завершена!</div>
+    <div id="winnerDisplay" style="margin:10px;"></div>
+    <div id="finalLeaderboard" class="leaderboard"></div>
+    <button id="saveFinalMapBtn" style="margin-top:20px;">💾 Сохранить карту</button>
+  </div>
   <div id="alertToast"></div>
 
   <div id="canvasContainer">
@@ -144,6 +174,15 @@
     <div style="width:300px; height:20px; background:#333; border-radius:10px; overflow:hidden;">
       <div id="loadingBar" style="width:0%; height:100%; background:#4CAF50; border-radius:10px;"></div>
     </div>
+  </div>
+
+  <!-- Книга инструкции -->
+  <div id="infoOverlay"></div>
+  <div id="infoBook">
+    <button class="close-btn" id="closeInfoBook">✖</button>
+    <h2>Инструкция</h2>
+    <div class="toc" id="toc"></div>
+    <div id="infoContent"></div>
   </div>
 
   <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
@@ -278,6 +317,7 @@
           attackPanel.style.display = 'none';
           saveBtnDiv.style.display = 'block';
           if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+          showGameEndScreen(leaderboard);   // показываем финальный экран
         }
         return;
       }
@@ -1068,7 +1108,11 @@
         gameOver = data.gameOver || false;
         updateTimer();
         if (!timerInterval) timerInterval = setInterval(updateTimer, 1000);
-        if (gameOver) { attackPanel.style.display = 'none'; saveBtnDiv.style.display = 'block'; }
+        if (gameOver) {
+          attackPanel.style.display = 'none';
+          saveBtnDiv.style.display = 'block';
+          showGameEndScreen(data.leaderboard || leaderboard);
+        }
       }
       if (currentPlayer.hashtag && data.defeatedPlayerId === currentPlayer.id) {
         currentPlayer.hashtag = null;
@@ -1518,6 +1562,93 @@
       });
     }
 
+    // ---------- КНИГА ИНСТРУКЦИИ ----------
+    const sections = [
+      { id: 'goal', title: 'Основная цель', text: 'Ты управляешь фандомным хештегом из паблика https://vk.com/cringearts и расширяешь его территорию на общем поле, используя ресурс лайков. Побеждает тот, чей хештег займёт больше клеток к концу игры (7 суток).' },
+      { id: 'start', title: 'Начало игры', text: 'При первом входе выбери ник (до 16 символов). Выбери основной хештег из списка (например, #Genshin_Impact). Если хештег уже занят другим игроком, ты можешь присоединиться к его фракции, нажав кнопку «Выбрать тэг персонажа по …». После выбора ты появляешься на карте в случайном месте (одна клетка твоего цвета).' },
+      { id: 'resource', title: 'Ресурс: лайки', text: 'Лайки на посты ВКонтакте с нужными хештегами автоматически зачисляются в твой пул. Командир (владелец основного хештега) получает лайки от всех свободных хештегов персонажей своей фракции. Подчинённый (владелец хештега персонажа) распоряжается лайками только своего малого хештега. Лайки тратятся на захват клеток. Одна клетка может потребовать несколько лайков (зависит от защиты противника).' },
+      { id: 'capture', title: 'Захват территории', text: 'Кликни на жёлтую рамку вокруг своей территории – это доступные для атаки клетки. В появившейся панели выбери сколько лайков ты готов потратить. Нажми «Атаковать». Клетки будут захватываться в зависимости от количества потраченных лайков. Нельзя атаковать союзников по фракции и самого себя. После потери всех клеток хештег блокируется на 1 час, и игрок становится наблюдателем.' },
+      { id: 'factions', title: 'Фракции и хештеги персонажей', text: 'Если основной хештег занят, ты можешь "Выбрать тэг персонажа по …" и стать подчиненным. В окне фракции ты видишь список свободных хештегов персонажей (например, #Raiden). Нажми «Занять» – ты станешь подчинённым командира и получишь одну клетку его цвета. Командир может передавать лайки подчинённым через панель «Передать лайки». Подчинённый может освободить хештег персонажа, тогда его клетки вернутся командиру.' },
+      { id: 'faction_window', title: 'Окно фракции', text: 'Открывается кнопкой 👥 (справа внизу). Если ты состоишь во фракции, на кнопке будет красная точка при новых сообщениях в чате. Левая колонка: список командира, подчинённых и свободных хештегов персонажей. Правая колонка: передача лайков, чат фракции. Кнопка «Вернуться к выбору основного хештега» (для тех, кто ещё не занял тег персонажа) позволяет выйти из фракции и выбрать другой хештег. Кнопка «Закрыть» — закрывает панель.' },
+      { id: 'chat', title: 'Чат фракции', text: 'В правой части панели фракции есть поле ввода. Сообщения видны всем членам фракции. Хранятся последние 100 сообщений. Уведомление (красная точка на кнопке 👥) появляется только при новых сообщениях от других игроков.' },
+      { id: 'block', title: 'Блокировка хештега', text: 'При полном уничтожении всех клеток игрока его хештег блокируется на 1 час. В списке выбора отображается оставшееся время. Если уничтожен командир, вся фракция блокируется на тот же срок.' },
+      { id: 'controls', title: 'Управление картой', text: 'Перетаскивание пальцем/мышью – перемещение по полю. Двойной клик по пустому месту (только с мыши) – центрирование на своей территории. Колёсико мыши / пинч – масштаб. Кнопка (⚙️) – освободить текущий хештег (стать наблюдателем).' },
+      { id: 'indicators', title: 'Индикация', text: 'Жёлтая рамка – клетки, доступные для атаки. Цветные подписи – названия хештегов и количество клеток. Стрелка (внизу по центру) указывает направление к твоей территории. Таймер сверху показывает время до конца игры.' },
+      { id: 'tech', title: 'Технические детали', text: 'Игра работает в VK Mini Apps, требуется интернет. Сервер обновляет состояние каждые 10 секунд, атаки обрабатываются мгновенно. Все действия (захват, освобождение, передача лайков) сразу подтверждаются сервером.' }
+    ];
+
+    function buildInfoBook() {
+      const tocDiv = document.getElementById('toc');
+      const contentDiv = document.getElementById('infoContent');
+      tocDiv.innerHTML = '';
+      contentDiv.innerHTML = '';
+
+      sections.forEach(sec => {
+        const link = document.createElement('a');
+        link.href = `#${sec.id}`;
+        link.textContent = sec.title;
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          document.getElementById(sec.id).scrollIntoView({ behavior: 'smooth' });
+        });
+        tocDiv.appendChild(link);
+
+        const sectionDiv = document.createElement('div');
+        sectionDiv.className = 'section';
+        sectionDiv.id = sec.id;
+        sectionDiv.innerHTML = `<h3>${sec.title}</h3><p>${sec.text}</p>`;
+        contentDiv.appendChild(sectionDiv);
+      });
+    }
+    buildInfoBook();
+
+    document.getElementById('infoBtn').addEventListener('click', () => {
+      document.getElementById('infoOverlay').style.display = 'block';
+      document.getElementById('infoBook').style.display = 'block';
+    });
+
+    document.getElementById('closeInfoBook').addEventListener('click', () => {
+      document.getElementById('infoOverlay').style.display = 'none';
+      document.getElementById('infoBook').style.display = 'none';
+    });
+    document.getElementById('infoOverlay').addEventListener('click', () => {
+      document.getElementById('infoOverlay').style.display = 'none';
+      document.getElementById('infoBook').style.display = 'none';
+    });
+
+    // ---------- ЭКРАН ЗАВЕРШЕНИЯ ИГРЫ ----------
+    function showGameEndScreen(leaderboardData) {
+      if (window.stateInterval) { clearInterval(window.stateInterval); window.stateInterval = null; }
+      if (window.chatInterval) { clearInterval(window.chatInterval); window.chatInterval = null; }
+      if (factionChatPollInterval) { clearInterval(factionChatPollInterval); factionChatPollInterval = null; }
+
+      document.getElementById('gameEndScreen').style.display = 'flex';
+      document.getElementById('attackPanel').style.display = 'none';
+      document.getElementById('legend').style.display = 'none';
+      document.getElementById('info').textContent = 'Игра завершена';
+
+      const winner = leaderboardData[0];
+      if (winner) {
+        document.getElementById('winnerDisplay').textContent = `Победитель: #${winner.hashtag} (${winner.cells} клеток)`;
+      }
+
+      const listDiv = document.getElementById('finalLeaderboard');
+      listDiv.innerHTML = '<strong>Итоговая таблица</strong>';
+      leaderboardData.forEach(e => {
+        listDiv.innerHTML += `<div class="leader-item"><div class="leader-color" style="background:${e.color}"></div><span class="leader-tag">#${e.hashtag}</span><span class="leader-cells">${e.cells}</span></div>`;
+      });
+    }
+
+    document.getElementById('saveFinalMapBtn').addEventListener('click', () => {
+      const dataUrl = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.download = 'hashtag_territory_final.png';
+      link.href = dataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    });
+
     // ---------- ИНИЦИАЛИЗАЦИЯ ----------
     startRenderLoop();
     showLoadingScreen();
@@ -1537,6 +1668,11 @@
         return r.json();
       })
       .then(state => {
+        if (state.gameOver) {
+          hideLoadingScreen();
+          showGameEndScreen(state.leaderboard || []);
+          return;
+        }
         if (state.player) {
           currentPlayer.likes = state.player.likes;
           currentPlayer.hashtag = state.player.hashtag || null;
