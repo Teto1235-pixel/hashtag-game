@@ -64,6 +64,10 @@
       font-family: 'Courier New', monospace;
       white-space: nowrap;
     }
+    .faction-layout { display: flex; gap: 15px; text-align: left; }
+    .faction-left { flex: 1; min-width: 200px; }
+    .faction-right { flex: 1; min-width: 200px; }
+    #factionChatMessages { height: 150px; overflow-y: auto; background: #f0f0f0; margin-top: 5px; padding: 4px; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -96,7 +100,10 @@
     <div id="factionContent"></div>
     <button id="closeFactionBtn">Закрыть</button>
   </div>
-  <button id="factionBtn" style="position:absolute; bottom:80px; right:20px; z-index:15; background:rgba(255,255,255,0.9); border:1px solid #ccc; padding:4px 10px; border-radius:4px; cursor:pointer; font-family:'Courier New',monospace;">👥</button>
+ <button id="factionBtn" style="position:absolute; bottom:80px; right:20px; z-index:15; background:rgba(255,255,255,0.9); border:1px solid #ccc; padding:4px 10px; border-radius:4px; cursor:pointer; font-family:'Courier New',monospace;">
+  👥
+  <span id="factionUnreadDot" style="display:none; position:absolute; top:-4px; right:-4px; width:12px; height:12px; background:red; border-radius:50%; border:1px solid white;"></span>
+</button>
 
   <div id="menuPanel">
   <p id="menuStatus"></p>
@@ -221,6 +228,8 @@
 
     let currentMapVersion = 0;
     let lastMessageId = null;
+    let factionChatPollInterval = null;
+    let factionLastReadTimestamp = 0;
 
     // UI элементы
     const attackPanel = document.getElementById('attackPanel');
@@ -504,98 +513,161 @@
     }
   }
 });
-    factionBtn.addEventListener('click', async () => {
+   factionBtn.addEventListener('click', async () => {
       const res = await fetch(`${SERVER_URL}/faction/info`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentPlayer.id })
       }).then(r => r.json());
+      
       if (!res.faction) {
         factionTitle.textContent = 'Вы не состоите во фракции';
         factionContent.innerHTML = '';
         factionPanel.style.display = 'block';
         return;
       }
+      
       const f = res.faction;
       factionTitle.textContent = `Фракция #${res.baseHashtag}`;
-      let html = '';
-      if (f.commander) html += `<p>Командир: ${f.commander.nickname}</p>`;
-      html += '<h4>Подчинённые:</h4>';
+      
+      // Левая колонка
+      let leftHtml = '';
+      if (f.commander) leftHtml += `<p>Командир: ${f.commander.nickname}</p>`;
+      leftHtml += '<h4>Подчинённые:</h4>';
       f.minors.filter(m => m.occupiedBy).forEach(m => {
-        html += `<p>${m.nickname} (${m.tag}) – ${m.likes} лайков <button data-action="view">Обзор</button></p>`;
+        leftHtml += `<p>${m.nickname} (${m.tag}) – ${m.likes} лайков</p>`;
       });
-      html += '<h4>Свободные малые хештеги:</h4>';
+      leftHtml += '<h4>Свободные малые хештеги:</h4>';
       f.minors.filter(m => !m.occupiedBy).forEach(m => {
-        html += `<p>#${m.tag} – ${m.likes} лайков <button data-action="claim" data-tag="${m.tag}" data-base="${res.baseHashtag}">Занять</button></p>`;
+        leftHtml += `<p>#${m.tag} – ${m.likes} лайков <button data-action="claim" data-tag="${m.tag}" data-base="${res.baseHashtag}">Занять</button></p>`;
       });
-      html += '<h4>Передать лайки</h4>';
-      html += '<p><select id="donateTarget">';
+      leftHtml += '<h4>Наблюдатели:</h4>';
+      f.observers.forEach(o => {
+        leftHtml += `<p>${o.nickname}</p>`;
+      });
+
+      // Правая колонка
+      let rightHtml = '<h4>Передать лайки</h4>';
+      rightHtml += '<p><select id="donateTarget">';
       if (f.commander && f.commander.userId !== currentPlayer.id) {
-        html += `<option value="${f.commander.userId}">Командир ${f.commander.nickname}</option>`;
+        rightHtml += `<option value="${f.commander.userId}">Командир ${f.commander.nickname}</option>`;
       }
       f.minors.filter(m => m.occupiedBy && m.occupiedBy !== currentPlayer.id).forEach(m => {
-        html += `<option value="${m.occupiedBy}">${m.nickname} (${m.tag})</option>`;
+        rightHtml += `<option value="${m.occupiedBy}">${m.nickname} (${m.tag})</option>`;
       });
-      html += '</select>';
-      html += '<input type="number" id="donateAmount" min="1" placeholder="Сколько">';
-      html += '<button data-action="donate">Передать</button></p>';
-      html += '<h4>Наблюдатели:</h4>';
-      f.observers.forEach(o => {
-        html += `<p>${o.nickname}</p>`;
-      });
+      rightHtml += '</select>';
+      rightHtml += '<input type="number" id="donateAmount" min="1" placeholder="Сколько">';
+      rightHtml += '<button data-action="donate">Передать</button></p>';
+      rightHtml += '<h4>Чат фракции</h4>';
+      rightHtml += `<div id="factionChatMessages"></div>`;
+      rightHtml += `<input type="text" id="factionChatInput" placeholder="Сообщение..." style="width:80%; padding:4px; margin-top:4px;">`;
+      rightHtml += `<button id="factionChatSendBtn" style="padding:4px 10px;">Отправить</button>`;
+
+      const html = `<div class="faction-layout"><div class="faction-left">${leftHtml}</div><div class="faction-right">${rightHtml}</div></div>`;
+      
+      factionContent.dataset.base = res.baseHashtag;
+      factionContent.innerHTML = html;
+      factionPanel.style.display = 'block';
+
+      // Загружаем историю чата фракции
+      loadFactionChat(res.baseHashtag);
+
+      // Помечаем, что мы прочитали чат (прячем точку)
+      factionLastReadTimestamp = Date.now();
+      document.getElementById('factionUnreadDot').style.display = 'none';
+
+      // Запускаем опрос новых сообщений, если ещё не запущен
+      if (factionChatPollInterval) clearInterval(factionChatPollInterval);
+      factionChatPollInterval = setInterval(() => pollFactionChat(res.baseHashtag), 5000);
+
+      // Кнопка освобождения (если подчинённый)
       if (currentPlayer.nickname) {
         const myMinor = f.minors.find(m => m.occupiedBy === currentPlayer.id);
-        if (myMinor) html += `<button id="releaseMinorBtn">Освободить хештег</button>`;
-      }
-      html += `<div id="factionChatMessages" style="height:150px; overflow-y:auto; background:#f0f0f0; margin-top:10px; padding:4px; font-size:12px;"></div>`;
-  html += `<input type="text" id="factionChatInput" placeholder="Сообщение фракции..." style="width:80%; padding:4px; margin-top:4px;">`;
-  html += `<button id="factionChatSendBtn" style="padding:4px 10px;">Отправить</button>`;
-  
-  factionContent.dataset.base = res.baseHashtag;
-  factionContent.innerHTML = html;
-  factionPanel.style.display = 'block';
-  
-  loadFactionChat(res.baseHashtag);
-
-      const releaseMinorBtnLocal = document.getElementById('releaseMinorBtn');
-      if (releaseMinorBtnLocal) {
-        releaseMinorBtnLocal.addEventListener('click', async () => {
-          const resp = await fetch(`${SERVER_URL}/faction/release`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: currentPlayer.id })
-          }).then(r => r.json());
-          if (resp.success) {
-            currentPlayer.faction = null;
-            currentPlayer.hashtag = null;
-            currentPlayer.likes = 0;
-            factionPanel.style.display = 'none';
-            if (resp.changedCells) {
-              applyServerResponse(resp, null);
-            } else {
-              try {
-                const syncRes = await fetch(`${SERVER_URL}/sync`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ userId: currentPlayer.id, clientVersion: currentMapVersion })
-                });
-                const data = await syncRes.json();
-                applyServerResponse(data, null);
-              } catch (e) {
-                updateInfo('Ошибка обновления');
+        if (myMinor) {
+          const releaseBtnHtml = `<button id="releaseMinorBtn">Освободить хештег</button>`;
+          factionContent.insertAdjacentHTML('beforeend', releaseBtnHtml);
+          document.getElementById('releaseMinorBtn').addEventListener('click', async () => {
+            const resp = await fetch(`${SERVER_URL}/faction/release`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId: currentPlayer.id })
+            }).then(r => r.json());
+            if (resp.success) {
+              currentPlayer.faction = null;
+              currentPlayer.hashtag = null;
+              currentPlayer.likes = 0;
+              factionPanel.style.display = 'none';
+              if (resp.changedCells) {
+                applyServerResponse(resp, null);
+              } else {
+                try {
+                  const syncRes = await fetch(`${SERVER_URL}/sync`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: currentPlayer.id, clientVersion: currentMapVersion })
+                  });
+                  const data = await syncRes.json();
+                  applyServerResponse(data, null);
+                } catch (e) {
+                  updateInfo('Ошибка обновления');
+                }
               }
+              needsRedraw = true;
+            } else {
+              updateInfo(resp.error);
             }
-            needsRedraw = true;
-          } else {
-            updateInfo(resp.error);
-          }
-        });
+          });
+        }
       }
     });
 
-    document.getElementById('closeFactionBtn').addEventListener('click', () => {
+ document.getElementById('closeFactionBtn').addEventListener('click', () => {
   factionPanel.style.display = 'none';
+  if (factionChatPollInterval) {
+    clearInterval(factionChatPollInterval);
+    factionChatPollInterval = null;
+  }
 });
+
+    async function loadFactionChat(baseHashtag) {
+      const container = document.getElementById('factionChatMessages');
+      if (!container) return;
+      container.innerHTML = ''; // очищаем
+      try {
+        const resp = await fetch(`${SERVER_URL}/faction/chat/get`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ baseHashtag })
+        }).then(r => r.json());
+        if (resp.messages && resp.messages.length > 0) {
+          for (const msg of resp.messages) {
+            const div = document.createElement('div');
+            div.textContent = `${msg.nickname}: ${msg.text}`;
+            container.appendChild(div);
+          }
+          container.scrollTop = container.scrollHeight;
+        }
+      } catch (e) {
+        console.error('Ошибка загрузки чата фракции:', e);
+      }
+    }
+
+    async function pollFactionChat(baseHashtag) {
+      if (!baseHashtag) return;
+      try {
+        const resp = await fetch(`${SERVER_URL}/faction/chat/get`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ baseHashtag })
+        }).then(r => r.json());
+        if (resp.messages && resp.messages.length > 0) {
+          const latest = resp.messages[resp.messages.length - 1];
+          if (latest.timestamp > factionLastReadTimestamp) {
+            document.getElementById('factionUnreadDot').style.display = 'block';
+          }
+        }
+      } catch (e) {}
+    }
 
     // ---------- ГРАНИЦЫ КАМЕРЫ ----------
     function clampCamera() {
@@ -1251,40 +1323,49 @@
           const likes = likesData[tag] || 0;
           let btnText = `#${tag} (${likes})`;
 
-          if (takenHashtags?.includes(tag)) {
-            btn.classList.add('taken');
-            btn.disabled = true;
-            btn.title = 'Хештег занят';
+        if (takenHashtags?.includes(tag)) {
+            // Проверяем, наша ли это фракция
+            if (currentPlayer.faction === tag) {
+              // Активная кнопка для своей фракции
+              btn.classList.remove('taken');
+              btn.disabled = false;
+              btn.textContent = `#${tag} (${likes})`;
+              btn.onclick = () => {
+                if (!currentPlayer.nickname) { updateInfo('Сначала задайте ник'); return; }
+                hideSelection();
+                factionBtn.click();   // сразу открываем панель фракции
+              };
+              row.appendChild(btn);
+            } else {
+              // Чужая занятая фракция
+              btn.classList.add('taken');
+              btn.disabled = true;
+              btn.title = 'Хештег занят';
+              btn.textContent = btnText;
 
-            const owner = Object.values(playersInfo).find(p => p.hashtag === tag);
-            if (owner && owner.blockedUntil && owner.blockedUntil > Date.now() && owner.id === currentPlayer.id) {
-              const mins = Math.ceil((owner.blockedUntil - Date.now()) / 60000);
-              btnText = `#${tag} (блок. ${mins}м)`;
+              const joinBtn = document.createElement('button');
+              joinBtn.textContent = '👥';
+              joinBtn.style.marginLeft = '4px';
+              joinBtn.title = 'Присоединиться к фракции';
+              joinBtn.onclick = (e) => {
+                e.stopPropagation();
+                if (!currentPlayer.nickname) { updateInfo('Сначала задайте ник'); return; }
+                fetch(`${SERVER_URL}/faction/join`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ userId: currentPlayer.id, baseHashtag: tag })
+                }).then(r => r.json()).then(resp => {
+                  if (resp.success) {
+                    hideSelection();
+                    factionBtn.click();
+                  } else {
+                    updateInfo(resp.error);
+                  }
+                });
+              };
+              row.appendChild(btn);
+              row.appendChild(joinBtn);
             }
-            btn.textContent = btnText;
-
-            const joinBtn = document.createElement('button');
-            joinBtn.textContent = '👥';
-            joinBtn.style.marginLeft = '4px';
-            joinBtn.title = 'Присоединиться к фракции';
-            joinBtn.onclick = (e) => {
-              e.stopPropagation();
-              if (!currentPlayer.nickname) { updateInfo('Сначала задайте ник'); return; }
-              fetch(`${SERVER_URL}/faction/join`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: currentPlayer.id, baseHashtag: tag })
-              }).then(r => r.json()).then(res => {
-                if (res.success) {
-                  hideSelection();
-                  factionBtn.click();
-                } else {
-                  updateInfo(res.error);
-                }
-              });
-            };
-            row.appendChild(btn);
-            row.appendChild(joinBtn);
           } else {
             btn.textContent = btnText;
             btn.onclick = () => {
