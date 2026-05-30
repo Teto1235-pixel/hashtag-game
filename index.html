@@ -36,11 +36,7 @@
     #menuPanel, #selection { display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:white; border:1px solid #ccc; padding:20px; z-index:20; }
     #menuPanel { text-align:center; }
     #selection { max-height:80vh; overflow-y:auto; }
-    #hashtagList {
-      max-height: 50vh;
-      overflow-y: auto;
-      margin-bottom: 10px;
-    }
+    #hashtagList { max-height: 50vh; overflow-y: auto; margin-bottom: 10px; }
     #selection button.taken { background:#ffcccc; color:#900; cursor:not-allowed; text-decoration:line-through; }
     #attackPanel { display:none; position:absolute; bottom:20px; left:50%; transform:translateX(-50%); background:white; border:1px solid #ccc; padding:15px; z-index:20; text-align:center; }
     #gameover { display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:100; justify-content:center; align-items:center; flex-direction:column; color:white; font-size:24px; }
@@ -51,18 +47,11 @@
     }
     #attackControls { display: flex; align-items: center; justify-content: center; gap: 8px; }
     #alertToast {
-      position: absolute;
-      top: 36px;           /* чуть ниже info */
-      left: 10px;
-      background: rgba(0,0,0,0.85);
-      color: #FFD700;
-      padding: 2px 10px;
-      border-radius: 12px;
-      font-size: 12px;
-      z-index: 30;
-      display: none;
-      font-family: 'Courier New', monospace;
-      white-space: nowrap;
+      position: absolute; top: 36px; left: 10px;
+      background: rgba(0,0,0,0.85); color: #FFD700;
+      padding: 2px 10px; border-radius: 12px; font-size: 12px;
+      z-index: 30; display: none;
+      font-family: 'Courier New', monospace; white-space: nowrap;
     }
     .faction-layout { display: flex; gap: 15px; text-align: left; }
     .faction-left { flex: 1; min-width: 200px; }
@@ -98,9 +87,8 @@
   <div id="factionPanel" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:white; border:1px solid #ccc; padding:20px; z-index:25; text-align:center; max-height:80vh; overflow-y:auto;">
     <h3 id="factionTitle"></h3>
     <div id="factionContent"></div>
-    <button id="closeFactionBtn">Закрыть</button>
   </div>
- <button id="factionBtn" style="position:absolute; bottom:80px; right:20px; z-index:15; background:rgba(255,255,255,0.9); border:1px solid #ccc; padding:4px 10px; border-radius:4px; cursor:pointer; font-family:'Courier New',monospace;">
+  <button id="factionBtn" style="position:absolute; bottom:80px; right:20px; z-index:15; background:rgba(255,255,255,0.9); border:1px solid #ccc; padding:4px 10px; border-radius:4px; cursor:pointer; font-family:'Courier New',monospace;">
   👥
   <span id="factionUnreadDot" style="display:none; position:absolute; top:-4px; right:-4px; width:12px; height:12px; background:red; border-radius:50%; border:1px solid white;"></span>
 </button>
@@ -242,9 +230,7 @@
     const leaderboardDiv = document.getElementById('leaderboard');
     const selectionDiv = document.getElementById('selection');
     const gameoverDiv = document.getElementById('gameover');
-    document.getElementById('gameoverSpectate').addEventListener('click', () => {
-      spectate();
-    });
+    document.getElementById('gameoverSpectate').addEventListener('click', () => spectate());
     const chatPanel = document.getElementById('chatPanel');
     const chatMessages = document.getElementById('chatMessages');
     const chatInput = document.getElementById('chatInput');
@@ -373,24 +359,20 @@
         const res = await fetch(`${SERVER_URL}/chat/get`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ afterId: lastMessageId })   // null при первом вызове
+          body: JSON.stringify({ afterId: lastMessageId })
         }).then(r => r.json());
-
         if (res.messages && res.messages.length > 0) {
-          // Определяем максимальный timestamp среди новых сообщений
           let maxTs = 0;
           for (const msg of res.messages) {
             if (msg.timestamp > maxTs) maxTs = msg.timestamp;
-            if (msg.id === lastMessageId) continue;          // защита от дубля
+            if (msg.id === lastMessageId) continue;
             const div = document.createElement('div');
             div.textContent = `${msg.nickname}: ${msg.text}`;
             chatMessages.appendChild(div);
             lastMessageId = msg.id;
           }
           chatMessages.scrollTop = chatMessages.scrollHeight;
-
           newestMessageTimestamp = maxTs;
-
           if (chatPanel.style.display === 'block') {
             lastReadTimestamp = newestMessageTimestamp;
             document.getElementById('chatUnreadDot').style.display = 'none';
@@ -402,34 +384,49 @@
         console.error('Ошибка чата:', e);
       }
     }
-   async function loadFactionChat(baseHashtag) {
-  const container = document.getElementById('factionChatMessages');
-  if (!container) return;
 
-  // Очищаем контейнер (на случай, если он не пуст)
-  container.innerHTML = '';
-
-  try {
-    const res = await fetch(`${SERVER_URL}/faction/chat/get`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ baseHashtag })
-    }).then(r => r.json());
-
-    if (res.messages && res.messages.length > 0) {
-      for (const msg of res.messages) {
-        const div = document.createElement('div');
-        div.textContent = `${msg.nickname}: ${msg.text}`;
-        container.appendChild(div);
+    // --- Фракционный чат ---
+    async function loadFactionChat(baseHashtag) {
+      const container = document.getElementById('factionChatMessages');
+      if (!container) return;
+      container.innerHTML = '';
+      try {
+        const resp = await fetch(`${SERVER_URL}/faction/chat/get`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ baseHashtag })
+        }).then(r => r.json());
+        if (resp.messages && resp.messages.length > 0) {
+          for (const msg of resp.messages) {
+            const div = document.createElement('div');
+            div.textContent = `${msg.nickname}: ${msg.text}`;
+            container.appendChild(div);
+          }
+          container.scrollTop = container.scrollHeight;
+        }
+      } catch (e) {
+        console.error('Ошибка загрузки чата фракции:', e);
       }
-      container.scrollTop = container.scrollHeight;
     }
-  } catch (e) {
-    console.error('Ошибка загрузки чата фракции:', e);
-  }
-}
 
-    // --- Фракция (делегирование событий) ---
+    async function pollFactionChat(baseHashtag) {
+      if (!baseHashtag) return;
+      try {
+        const resp = await fetch(`${SERVER_URL}/faction/chat/get`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ baseHashtag })
+        }).then(r => r.json());
+        if (resp.messages && resp.messages.length > 0) {
+          const latest = resp.messages[resp.messages.length - 1];
+          if (latest.timestamp > factionLastReadTimestamp) {
+            document.getElementById('factionUnreadDot').style.display = 'block';
+          }
+        }
+      } catch (e) {}
+    }
+
+    // --- Делегирование событий фракционного контента ---
     factionContent.addEventListener('click', async (e) => {
       const btn = e.target.closest('button');
       if (!btn) return;
@@ -476,20 +473,17 @@
         } catch (err) {
           updateInfo('Ошибка сети');
         }
-       } else if (btn.id === 'factionChatSendBtn') {
+      } else if (btn.id === 'factionChatSendBtn') {
         const input = document.getElementById('factionChatInput');
         const text = input.value.trim();
         if (!text) return;
         const baseHashtag = factionContent.dataset.base;
-        
         await fetch(`${SERVER_URL}/faction/chat/send`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: currentPlayer.id, baseHashtag, text })
         });
         input.value = '';
-        
-        // Добавляем сообщение локально
         const container = document.getElementById('factionChatMessages');
         const nickname = currentPlayer.nickname || 'Аноним';
         const div = document.createElement('div');
@@ -499,38 +493,38 @@
       }
     });
 
-   document.addEventListener('visibilitychange', () => {
-  if (document.hidden) {
-    if (window.chatInterval) {
-      clearInterval(window.chatInterval);
-      window.chatInterval = null;
-    }
-  } else {
-    // возобновляем опрос, только если игрок уже в игре
-    if (currentPlayer.id && (currentPlayer.hashtag || currentPlayer.faction)) {
-      if (window.chatInterval) clearInterval(window.chatInterval);
-      window.chatInterval = setInterval(fetchChatMessages, 10000); // 10 секунд
-    }
-  }
-});
-   factionBtn.addEventListener('click', async () => {
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        if (window.chatInterval) {
+          clearInterval(window.chatInterval);
+          window.chatInterval = null;
+        }
+      } else {
+        if (currentPlayer.id && (currentPlayer.hashtag || currentPlayer.faction)) {
+          if (window.chatInterval) clearInterval(window.chatInterval);
+          window.chatInterval = setInterval(fetchChatMessages, 10000);
+        }
+      }
+    });
+
+    // --- Кнопка фракции ---
+    factionBtn.addEventListener('click', async () => {
       const res = await fetch(`${SERVER_URL}/faction/info`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentPlayer.id })
       }).then(r => r.json());
-      
       if (!res.faction) {
         factionTitle.textContent = 'Вы не состоите во фракции';
         factionContent.innerHTML = '';
         factionPanel.style.display = 'block';
         return;
       }
-      
       const f = res.faction;
       factionTitle.textContent = `Фракция #${res.baseHashtag}`;
-      
-      // Левая колонка
+      const myMinor = f.minors.find(m => m.occupiedBy === currentPlayer.id);
+      const hasMinor = !!myMinor;
+
       let leftHtml = '';
       if (f.commander) leftHtml += `<p>Командир: ${f.commander.nickname}</p>`;
       leftHtml += '<h4>Подчинённые:</h4>';
@@ -541,12 +535,7 @@
       f.minors.filter(m => !m.occupiedBy).forEach(m => {
         leftHtml += `<p>#${m.tag} – ${m.likes} лайков <button data-action="claim" data-tag="${m.tag}" data-base="${res.baseHashtag}">Занять</button></p>`;
       });
-      leftHtml += '<h4>Наблюдатели:</h4>';
-      f.observers.forEach(o => {
-        leftHtml += `<p>${o.nickname}</p>`;
-      });
 
-      // Правая колонка
       let rightHtml = '<h4>Передать лайки</h4>';
       rightHtml += '<p><select id="donateTarget">';
       if (f.commander && f.commander.userId !== currentPlayer.id) {
@@ -564,10 +553,38 @@
       rightHtml += `<button id="factionChatSendBtn" style="padding:4px 10px;">Отправить</button>`;
 
       const html = `<div class="faction-layout"><div class="faction-left">${leftHtml}</div><div class="faction-right">${rightHtml}</div></div>`;
-      
       factionContent.dataset.base = res.baseHashtag;
       factionContent.innerHTML = html;
       factionPanel.style.display = 'block';
+
+      // Кнопка возврата / закрытия
+      let closeBtnHtml;
+      if (!hasMinor) {
+        closeBtnHtml = `<button id="closeFactionBtn" style="margin-top:10px;">← Вернуться к выбору основного хештега</button>`;
+      } else {
+        closeBtnHtml = `<button id="closeFactionBtn" style="margin-top:10px;">Закрыть</button>`;
+      }
+      factionContent.insertAdjacentHTML('beforeend', closeBtnHtml);
+
+      document.getElementById('closeFactionBtn').addEventListener('click', () => {
+        if (!hasMinor) {
+          fetch(`${SERVER_URL}/faction/leave`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: currentPlayer.id })
+          });
+          currentPlayer.faction = null;
+          factionPanel.style.display = 'none';
+          const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
+          showSelection(AVAILABLE_HASHTAGS, taken);
+        } else {
+          factionPanel.style.display = 'none';
+          if (factionChatPollInterval) {
+            clearInterval(factionChatPollInterval);
+            factionChatPollInterval = null;
+          }
+        }
+      });
 
       // Загружаем историю чата фракции
       loadFactionChat(res.baseHashtag);
@@ -576,98 +593,33 @@
       factionLastReadTimestamp = Date.now();
       document.getElementById('factionUnreadDot').style.display = 'none';
 
-      // Запускаем опрос новых сообщений, если ещё не запущен
+      // Запускаем опрос новых сообщений
       if (factionChatPollInterval) clearInterval(factionChatPollInterval);
       factionChatPollInterval = setInterval(() => pollFactionChat(res.baseHashtag), 5000);
 
-      // Кнопка освобождения (если подчинённый)
-      if (currentPlayer.nickname) {
-        const myMinor = f.minors.find(m => m.occupiedBy === currentPlayer.id);
-        if (myMinor) {
-          const releaseBtnHtml = `<button id="releaseMinorBtn">Освободить хештег</button>`;
-          factionContent.insertAdjacentHTML('beforeend', releaseBtnHtml);
-          document.getElementById('releaseMinorBtn').addEventListener('click', async () => {
-            const resp = await fetch(`${SERVER_URL}/faction/release`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ userId: currentPlayer.id })
-            }).then(r => r.json());
-            if (resp.success) {
-              currentPlayer.faction = null;
-              currentPlayer.hashtag = null;
-              currentPlayer.likes = 0;
-              factionPanel.style.display = 'none';
-              if (resp.changedCells) {
-                applyServerResponse(resp, null);
-              } else {
-                try {
-                  const syncRes = await fetch(`${SERVER_URL}/sync`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId: currentPlayer.id, clientVersion: currentMapVersion })
-                  });
-                  const data = await syncRes.json();
-                  applyServerResponse(data, null);
-                } catch (e) {
-                  updateInfo('Ошибка обновления');
-                }
-              }
-              needsRedraw = true;
-            } else {
-              updateInfo(resp.error);
-            }
-          });
-        }
+      // Кнопка освобождения малого хештега
+      if (hasMinor) {
+        const releaseBtnHtml = '<button id="releaseMinorBtn">Освободить хештег</button>';
+        factionContent.insertAdjacentHTML('beforeend', releaseBtnHtml);
+        document.getElementById('releaseMinorBtn').addEventListener('click', async () => {
+          const resp = await fetch(`${SERVER_URL}/faction/release`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: currentPlayer.id })
+          }).then(r => r.json());
+          if (resp.success) {
+            currentPlayer.faction = null;
+            currentPlayer.hashtag = null;
+            currentPlayer.likes = 0;
+            factionPanel.style.display = 'none';
+            const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
+            showSelection(AVAILABLE_HASHTAGS, taken);
+          } else {
+            updateInfo(resp.error);
+          }
+        });
       }
     });
-
- document.getElementById('closeFactionBtn').addEventListener('click', () => {
-  factionPanel.style.display = 'none';
-  if (factionChatPollInterval) {
-    clearInterval(factionChatPollInterval);
-    factionChatPollInterval = null;
-  }
-});
-
-    async function loadFactionChat(baseHashtag) {
-      const container = document.getElementById('factionChatMessages');
-      if (!container) return;
-      container.innerHTML = ''; // очищаем
-      try {
-        const resp = await fetch(`${SERVER_URL}/faction/chat/get`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ baseHashtag })
-        }).then(r => r.json());
-        if (resp.messages && resp.messages.length > 0) {
-          for (const msg of resp.messages) {
-            const div = document.createElement('div');
-            div.textContent = `${msg.nickname}: ${msg.text}`;
-            container.appendChild(div);
-          }
-          container.scrollTop = container.scrollHeight;
-        }
-      } catch (e) {
-        console.error('Ошибка загрузки чата фракции:', e);
-      }
-    }
-
-    async function pollFactionChat(baseHashtag) {
-      if (!baseHashtag) return;
-      try {
-        const resp = await fetch(`${SERVER_URL}/faction/chat/get`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ baseHashtag })
-        }).then(r => r.json());
-        if (resp.messages && resp.messages.length > 0) {
-          const latest = resp.messages[resp.messages.length - 1];
-          if (latest.timestamp > factionLastReadTimestamp) {
-            document.getElementById('factionUnreadDot').style.display = 'block';
-          }
-        }
-      } catch (e) {}
-    }
 
     // ---------- ГРАНИЦЫ КАМЕРЫ ----------
     function clampCamera() {
@@ -688,7 +640,6 @@
     function updateAdjacentSet() {
       adjacentSet.clear();
       if (!currentPlayer.id || !currentPlayer.hashtag) return;
-
       const dirs = [[0, -1], [0, 1], [-1, 0], [1, 0]];
       for (const {x, y} of myCells) {
         for (const [dx, dy] of dirs) {
@@ -706,7 +657,6 @@
       territoryBoundsCache = {};
       const safeH = Math.min(MAP_H, map.length);
       const safeW = Math.min(MAP_W, map[0]?.length || 0);
-
       const ownerMap = new Map();
       for (let y = 0; y < safeH; y++) {
         for (let x = 0; x < safeW; x++) {
@@ -725,23 +675,18 @@
           b.count++;
         }
       }
-
       territoryBoundsCache = {};
       for (const [owner, b] of ownerMap.entries()) {
         territoryBoundsCache[owner] = { minX: b.minX, minY: b.minY, maxX: b.maxX, maxY: b.maxY, count: b.count };
       }
-
       myCells = [];
       const isCommander = currentPlayer.hashtag && AVAILABLE_HASHTAGS.includes(currentPlayer.hashtag);
       for (let y = 0; y < safeH; y++) {
         for (let x = 0; x < safeW; x++) {
           const owner = map[y][x].ownerId;
           if (!owner) continue;
-          if (owner === currentPlayer.id) {
-            myCells.push({x, y});
-          } else if (isCommander && playersInfo[owner]?.faction === currentPlayer.faction) {
-            myCells.push({x, y});
-          }
+          if (owner === currentPlayer.id) myCells.push({x, y});
+          else if (isCommander && playersInfo[owner]?.faction === currentPlayer.faction) myCells.push({x, y});
         }
       }
       if (myCells.length > 0) {
@@ -753,13 +698,10 @@
         myCenterX = sumX / myCells.length;
         myCenterY = sumY / myCells.length;
       } else {
-        myCenterX = 0;
-        myCenterY = 0;
+        myCenterX = 0; myCenterY = 0;
       }
-
       const factionBounds = {};
       const minorBounds = [];
-
       for (const [owner, bounds] of ownerMap.entries()) {
         const info = playersInfo[owner];
         if (!info || !info.hashtag) continue;
@@ -778,26 +720,19 @@
           minorBounds.push({ ...bounds, hashtag: info.hashtag, owner });
         }
       }
-
-      labelCache = {
-        commanders: Object.values(factionBounds),
-        minors: minorBounds
-      };
+      labelCache = { commanders: Object.values(factionBounds), minors: minorBounds };
     }
 
     function rebuildOffscreen() {
       if (!map || map.length !== MAP_H || !map[0] || map[0].length !== MAP_W) return;
-
       if (!offscreen || offscreen.width !== MAP_W * CELL_SIZE || offscreen.height !== MAP_H * CELL_SIZE) {
         offscreen = document.createElement('canvas');
         offscreen.width = MAP_W * CELL_SIZE;
         offscreen.height = MAP_H * CELL_SIZE;
         offCtx = offscreen.getContext('2d');
       }
-
       offCtx.fillStyle = '#ffffff';
       offCtx.fillRect(0, 0, MAP_W * CELL_SIZE, MAP_H * CELL_SIZE);
-
       for (let y = 0; y < MAP_H; y++) {
         for (let x = 0; x < MAP_W; x++) {
           const cell = map[y][x];
@@ -842,7 +777,6 @@
         minX = Math.max(0, bounds.minX - 1);
         maxX = Math.min(MAP_W - 1, bounds.maxX + 1);
       }
-
       let bestCell = null, bestDist = Infinity;
       for (let y = minY; y <= maxY; y++) {
         for (let x = minX; x <= maxX; x++) {
@@ -869,10 +803,7 @@
       const canvasY = (sy - rect.top) * scaleY;
       const worldX = canvasX / zoom + viewX;
       const worldY = canvasY / zoom + viewY;
-      return {
-        x: Math.floor(worldX / CELL_SIZE),
-        y: Math.floor(worldY / CELL_SIZE)
-      };
+      return { x: Math.floor(worldX / CELL_SIZE), y: Math.floor(worldY / CELL_SIZE) };
     }
 
     // ---------- УПРАВЛЕНИЕ КАМЕРОЙ ----------
@@ -882,12 +813,9 @@
 
     canvas.addEventListener('mousedown', e => {
       if (e.button !== 0) return;
-      isDragging = true;
-      hasMoved = false;
-      dragStartX = e.clientX;
-      dragStartY = e.clientY;
-      dragStartViewX = viewX;
-      dragStartViewY = viewY;
+      isDragging = true; hasMoved = false;
+      dragStartX = e.clientX; dragStartY = e.clientY;
+      dragStartViewX = viewX; dragStartViewY = viewY;
       canvas.style.cursor = 'grabbing';
       const {x, y} = screenToWorld(e.clientX, e.clientY);
       clickTarget = (x >= 0 && x < MAP_W && y >= 0 && y < MAP_H) ? { x, y } : null;
@@ -909,10 +837,7 @@
       needsRedraw = true;
     });
 
-    window.addEventListener('mouseup', () => {
-      isDragging = false;
-      canvas.style.cursor = 'default';
-    });
+    window.addEventListener('mouseup', () => { isDragging = false; canvas.style.cursor = 'default'; });
 
     canvas.addEventListener('wheel', e => {
       e.preventDefault();
@@ -940,12 +865,9 @@
       e.preventDefault();
       const t = e.touches;
       if (t.length === 1) {
-        isDragging = true;
-        hasMoved = false;
-        dragStartX = t[0].clientX;
-        dragStartY = t[0].clientY;
-        dragStartViewX = viewX;
-        dragStartViewY = viewY;
+        isDragging = true; hasMoved = false;
+        dragStartX = t[0].clientX; dragStartY = t[0].clientY;
+        dragStartViewX = viewX; dragStartViewY = viewY;
         const {x, y} = screenToWorld(t[0].clientX, t[0].clientY);
         clickTarget = (x >= 0 && x < MAP_W && y >= 0 && y < MAP_H) ? { x, y } : null;
       } else if (t.length === 2) {
@@ -1052,9 +974,7 @@
       attackPanel.style.display = 'block';
     }
     function hideAttackPanel() { attackPanel.style.display = 'none'; selectedTarget = null; }
-    powerSlider.addEventListener('input', () => {
-      powerValue.textContent = powerSlider.value;
-    });
+    powerSlider.addEventListener('input', () => { powerValue.textContent = powerSlider.value; });
     document.getElementById('powerPlus').addEventListener('click', () => {
       if (parseInt(powerSlider.value) < currentPlayer.likes) {
         powerSlider.value = parseInt(powerSlider.value) + 1;
@@ -1091,10 +1011,7 @@
       }
       menuPanel.style.display = 'block';
     });
-
-    document.getElementById('closeMenuBtn').addEventListener('click', () => {
-      menuPanel.style.display = 'none';
-    });
+    document.getElementById('closeMenuBtn').addEventListener('click', () => { menuPanel.style.display = 'none'; });
 
     releaseBtn.addEventListener('click', async () => {
       if (!currentPlayer.hashtag) return;
@@ -1112,12 +1029,8 @@
           setTimeout(() => fetchState(), 1000);
           menuPanel.style.display = 'none';
           updateInfo('Хештег освобождён. Ваши клетки стали нейтральными.');
-        } else {
-          alert(res.error);
-        }
-      } catch (e) {
-        alert('Ошибка сети');
-      }
+        } else alert(res.error);
+      } catch (e) { alert('Ошибка сети'); }
     });
 
     chooseHashtagBtn.addEventListener('click', async () => {
@@ -1129,27 +1042,17 @@
 
     // ---------- СЕРВЕРНЫЕ ЗАПРОСЫ ----------
     function applyServerResponse(data, capturedCells) {
-      if (data.mapVersion !== undefined) {
-        currentMapVersion = data.mapVersion;
-      }
-
-      if (data.faction !== undefined) {
-        currentPlayer.faction = data.faction;
-      } else if (data.player && data.player.faction !== undefined) {
-        currentPlayer.faction = data.player.faction;
-      }
-
+      if (data.mapVersion !== undefined) currentMapVersion = data.mapVersion;
+      if (data.faction !== undefined) currentPlayer.faction = data.faction;
+      else if (data.player && data.player.faction !== undefined) currentPlayer.faction = data.player.faction;
       if (data.player) {
         currentPlayer.likes = data.player.likes;
         if (!currentPlayer.hashtag && data.player.hashtag) currentPlayer.hashtag = data.player.hashtag;
         if (data.player.spawnX !== undefined) { currentPlayer.spawnX = data.player.spawnX; currentPlayer.spawnY = data.player.spawnY; }
         if (data.player.hashtag !== undefined) {
-        if (data.player.hashtag && AVAILABLE_HASHTAGS.includes(data.player.hashtag)) {
-      currentPlayer.faction = data.player.hashtag; // командир
-    } else if (!data.player.hashtag) {
-      currentPlayer.faction = null; // сброс, если хештега нет
-    }
-  }
+          if (data.player.hashtag && AVAILABLE_HASHTAGS.includes(data.player.hashtag)) currentPlayer.faction = data.player.hashtag;
+          else if (!data.player.hashtag) currentPlayer.faction = null;
+        }
         if (data.player.nickname && !currentPlayer.nickname) {
           currentPlayer.nickname = data.player.nickname;
           document.getElementById('nicknameInput').style.display = 'none';
@@ -1157,26 +1060,19 @@
           document.getElementById('nicknameDisplay').textContent = 'Ник: ' + data.player.nickname;
           document.getElementById('nicknameDisplay').style.display = 'inline';
         }
-        if (data.player.blockedUntil !== undefined) {
-          currentPlayer.blockedUntil = data.player.blockedUntil;
-        }
+        if (data.player.blockedUntil !== undefined) currentPlayer.blockedUntil = data.player.blockedUntil;
       }
       if (data.playersInfo) playersInfo = data.playersInfo;
       if (data.worldW) MAP_W = data.worldW; if (data.worldH) MAP_H = data.worldH;
       if (data.leaderboard) leaderboard = data.leaderboard;
       if (data.hashtagLikes) hashtagLikes = data.hashtagLikes;
-
       if (data.gameEndTime) {
         gameEndTime = data.gameEndTime;
         gameOver = data.gameOver || false;
         updateTimer();
         if (!timerInterval) timerInterval = setInterval(updateTimer, 1000);
-        if (gameOver) {
-          attackPanel.style.display = 'none';
-          saveBtnDiv.style.display = 'block';
-        }
+        if (gameOver) { attackPanel.style.display = 'none'; saveBtnDiv.style.display = 'block'; }
       }
-
       if (currentPlayer.hashtag && data.defeatedPlayerId === currentPlayer.id) {
         currentPlayer.hashtag = null;
         currentPlayer.faction = null;
@@ -1187,7 +1083,6 @@
         adjacentSet.clear();
         needsRedraw = true;
       }
-
       if (data.changedCells && data.changedCells.length) {
         for (const ch of data.changedCells) {
           if (ch.x >= 0 && ch.x < MAP_W && ch.y >= 0 && ch.y < MAP_H) {
@@ -1202,7 +1097,6 @@
         updateInfo(`Лайков: ${currentPlayer.likes}`);
         return;
       }
-
       if (data.map && Array.isArray(data.map)) {
         map = data.map;
         rebuildOffscreen();
@@ -1227,22 +1121,21 @@
     function claimHashtag(hashtag) {
       fetch(`${SERVER_URL}/claim`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:currentPlayer.id, hashtag}) })
       .then(r=>r.json()).then(res=>{
-          if (res.success) {
-            currentPlayer.faction = hashtag; 
-            currentPlayer.color = res.player.color;
-            currentPlayer.spawnX = res.player.spawnX; currentPlayer.spawnY = res.player.spawnY;
-            spectating = false;
-            resizeCanvas();
-            applyServerResponse(res, null);   // карта уже пришла и обновлена
-            hideSelection();
-            // вместо startGame() просто обновим интервалы, карта уже готова
-            if (window.stateInterval) clearInterval(window.stateInterval);
-            if (window.chatInterval) clearInterval(window.chatInterval);
-            window.stateInterval = setInterval(fetchState, 10000);
-            window.chatInterval = setInterval(fetchChatMessages, 10000);
-            updateInfo(`Лайков: ${currentPlayer.likes}`);
-            needsRedraw = true;
-          } else alert(res.error);
+        if (res.success) {
+          currentPlayer.faction = hashtag;
+          currentPlayer.color = res.player.color;
+          currentPlayer.spawnX = res.player.spawnX; currentPlayer.spawnY = res.player.spawnY;
+          spectating = false;
+          resizeCanvas();
+          applyServerResponse(res, null);
+          hideSelection();
+          if (window.stateInterval) clearInterval(window.stateInterval);
+          if (window.chatInterval) clearInterval(window.chatInterval);
+          window.stateInterval = setInterval(fetchState, 10000);
+          window.chatInterval = setInterval(fetchChatMessages, 10000);
+          updateInfo(`Лайков: ${currentPlayer.likes}`);
+          needsRedraw = true;
+        } else alert(res.error);
       });
     }
 
@@ -1265,10 +1158,7 @@
           applyServerResponse(res, null);
         }
       })
-      .catch(() => {
-        attackInProgress = false;
-        updateInfo('⚠️ Ошибка сети при атаке');
-      });
+      .catch(() => { attackInProgress = false; updateInfo('⚠️ Ошибка сети при атаке'); });
     }
 
     function fetchState() {
@@ -1281,9 +1171,7 @@
       .then(r => r.json())
       .then(data => {
         applyServerResponse(data, null);
-        if (!data.changedCells && !data.map) {
-          needsRedraw = true;
-        }
+        if (!data.changedCells && !data.map) needsRedraw = true;
       })
       .catch(err => console.error('Ошибка sync:', err));
     }
@@ -1292,7 +1180,7 @@
       fetch(`${SERVER_URL}/spectate`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:currentPlayer.id}) })
       .then(() => {
         currentPlayer.hashtag = null;
-        currentPlayer.faction = null;   
+        currentPlayer.faction = null;
         spectating = true;
         gameoverDiv.style.display = 'none';
         hideSelection();
@@ -1308,43 +1196,35 @@
       document.getElementById('canvasContainer').style.pointerEvents = 'none';
       const listDiv = document.getElementById('hashtagList');
       const spectateBtn = document.getElementById('spectateBtn');
-
       function buildList(likesData) {
         listDiv.innerHTML = '';
         const myBlocked = currentPlayer.blockedUntil && currentPlayer.blockedUntil > Date.now();
-
         hashtags.forEach(tag => {
           const row = document.createElement('div');
           row.style.display = 'flex';
           row.style.alignItems = 'center';
           row.style.marginBottom = '6px';
-
           const btn = document.createElement('button');
           const likes = likesData[tag] || 0;
           let btnText = `#${tag} (${likes})`;
-
-        if (takenHashtags?.includes(tag)) {
-            // Проверяем, наша ли это фракция
+          if (takenHashtags?.includes(tag)) {
             if (currentPlayer.faction === tag) {
-              // Активная кнопка для своей фракции
               btn.classList.remove('taken');
               btn.disabled = false;
-              btn.textContent = `#${tag} (${likes})`;
+              btn.textContent = `Выбрать тэг персонажа по ${tag} (${likes})`;
               btn.onclick = () => {
                 if (!currentPlayer.nickname) { updateInfo('Сначала задайте ник'); return; }
                 hideSelection();
-                factionBtn.click();   // сразу открываем панель фракции
+                factionBtn.click();
               };
               row.appendChild(btn);
             } else {
-              // Чужая занятая фракция
               btn.classList.add('taken');
               btn.disabled = true;
               btn.title = 'Хештег занят';
               btn.textContent = btnText;
-
               const joinBtn = document.createElement('button');
-              joinBtn.textContent = '👥';
+              joinBtn.textContent = `Выбрать тэг персонажа по ${tag}`;
               joinBtn.style.marginLeft = '4px';
               joinBtn.title = 'Присоединиться к фракции';
               joinBtn.onclick = (e) => {
@@ -1358,9 +1238,7 @@
                   if (resp.success) {
                     hideSelection();
                     factionBtn.click();
-                  } else {
-                    updateInfo(resp.error);
-                  }
+                  } else updateInfo(resp.error);
                 });
               };
               row.appendChild(btn);
@@ -1377,20 +1255,17 @@
               }
               claimHashtag(tag);
             };
-            // Показываем оставшееся время блокировки, если хештег занят игроком с блокировкой
-          const owner = Object.values(playersInfo).find(p => p.hashtag === tag);
+            const owner = Object.values(playersInfo).find(p => p.hashtag === tag);
             if (owner && owner.blockedUntil && owner.blockedUntil > Date.now()) {
               const mins = Math.ceil((owner.blockedUntil - Date.now()) / 60000);
-              btnText = `#${tag} (осв. ${mins}м)`;
+              btn.textContent = `#${tag} (осв. ${mins}м)`;
             }
             row.appendChild(btn);
           }
           listDiv.appendChild(row);
         });
       }
-
       buildList(hashtagLikes);
-
       if (selectionRefreshInterval) clearInterval(selectionRefreshInterval);
       selectionRefreshInterval = setInterval(async () => {
         try {
@@ -1401,14 +1276,11 @@
           }).then(r => r.json());
           if (res.hashtagLikes) {
             hashtagLikes = res.hashtagLikes;
-            if (res.player) {
-              currentPlayer.blockedUntil = res.player.blockedUntil || 0;
-            }
+            if (res.player) currentPlayer.blockedUntil = res.player.blockedUntil || 0;
             buildList(hashtagLikes);
           }
         } catch (e) {}
       }, 5000);
-
       spectateBtn.onclick = spectate;
       selectionDiv.style.display = 'block';
     }
@@ -1416,10 +1288,7 @@
     function hideSelection() {
       document.getElementById('overlay').style.display = 'none';
       document.getElementById('canvasContainer').style.pointerEvents = '';
-      if (selectionRefreshInterval) {
-        clearInterval(selectionRefreshInterval);
-        selectionRefreshInterval = null;
-      }
+      if (selectionRefreshInterval) { clearInterval(selectionRefreshInterval); selectionRefreshInterval = null; }
       selectionDiv.style.display = 'none';
     }
 
@@ -1432,12 +1301,10 @@
       ctx.translate(-viewX, -viewY);
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, MAP_W * CELL_SIZE, MAP_H * CELL_SIZE);
-
       const startX = Math.max(0, Math.floor(viewX / CELL_SIZE));
       const startY = Math.max(0, Math.floor(viewY / CELL_SIZE));
       const endX = Math.min(MAP_W, startX + Math.ceil(canvas.width / (CELL_SIZE * zoom)) + 2);
       const endY = Math.min(MAP_H, startY + Math.ceil(canvas.height / (CELL_SIZE * zoom)) + 2);
-
       if (!animating && offscreen) {
         ctx.drawImage(offscreen, 0, 0);
       } else {
@@ -1455,7 +1322,6 @@
           }
         }
       }
-
       if (!animating && currentPlayer.id && currentPlayer.hashtag && adjacentSet.size) {
         ctx.strokeStyle = '#FFD700';
         ctx.lineWidth = 1.5 / zoom;
@@ -1464,7 +1330,6 @@
           ctx.strokeRect(cx * CELL_SIZE, cy * CELL_SIZE, CELL_SIZE, CELL_SIZE);
         });
       }
-
       if (!animating && labelCache) {
         ctx.save();
         for (const b of labelCache.commanders) {
@@ -1493,7 +1358,6 @@
         }
         ctx.restore();
       }
-
       for (let y = startY; y < endY; y++) {
         for (let x = startX; x < endX; x++) {
           const cell = map[y][x];
@@ -1521,9 +1385,7 @@
           }
         }
       }
-
       ctx.restore();
-
       if (currentPlayer.id && currentPlayer.hashtag && myCells.length > 0) {
         const arrowX = canvas.width / 2;
         const arrowY = canvas.height - 60;
@@ -1551,12 +1413,8 @@
           ctx.restore();
         }
       }
-
-      if (currentPlayer.id) {
-        menuBtn.style.display = 'block';
-      } else {
-        menuBtn.style.display = 'none';
-      }
+      if (currentPlayer.id) menuBtn.style.display = 'block';
+      else menuBtn.style.display = 'none';
       if (currentPlayer.id && currentPlayer.nickname && (currentPlayer.hashtag || currentPlayer.faction)) {
         factionBtn.style.display = 'block';
         chatToggleBtn.style.display = 'block';
@@ -1568,9 +1426,7 @@
         legend.style.display = 'flex';
         legendColor.style.backgroundColor = currentPlayer.color;
         legendHashtag.textContent = '#' + currentPlayer.hashtag;
-      } else {
-        legend.style.display = 'none';
-      }
+      } else legend.style.display = 'none';
       updateLeaderboard();
     }
 
@@ -1591,16 +1447,11 @@
       toast.textContent = text;
       toast.style.display = 'block';
       if (alertTimer) clearTimeout(alertTimer);
-      alertTimer = setTimeout(() => {
-        toast.style.display = 'none';
-      }, 1000);
+      alertTimer = setTimeout(() => { toast.style.display = 'none'; }, 1000);
     }
 
     function animateCapture(cells, serverMap) {
-      if (!Array.isArray(serverMap)) {
-        animating = false;
-        return;
-      }
+      if (!Array.isArray(serverMap)) { animating = false; return; }
       map = serverMap;
       rebuildOffscreen();
       rebuildTerritoryCache();
@@ -1624,9 +1475,7 @@
     function hideLoadingScreen() {
       clearInterval(window.loadingInterval);
       document.getElementById('loadingBar').style.width = '100%';
-      setTimeout(() => {
-        document.getElementById('loadingScreen').style.display = 'none';
-      }, 300);
+      setTimeout(() => { document.getElementById('loadingScreen').style.display = 'none'; }, 300);
     }
 
     function startGame() {
@@ -1652,17 +1501,14 @@
         rebuildOffscreen();
         rebuildTerritoryCache();
         updateAdjacentSet();
-        if (!window.stateInterval) hideLoadingScreen();
+        hideLoadingScreen();
         needsRedraw = true;
         updateInfo(`Лайков: ${currentPlayer.likes}`);
         fetchState();
-
         if (window.stateInterval) clearInterval(window.stateInterval);
         if (window.chatInterval) clearInterval(window.chatInterval);
-
         window.stateInterval = setInterval(fetchState, 10000);
         window.chatInterval = setInterval(fetchChatMessages, 10000);
-
         window.addEventListener('beforeunload', () => {
           clearInterval(window.stateInterval);
           clearInterval(window.chatInterval);
@@ -1670,7 +1516,7 @@
         fetchChatMessages();
       })
       .catch(err => {
-        if (!window.stateInterval) hideLoadingScreen();
+        hideLoadingScreen();
         updateInfo('⚠️ Ошибка загрузки мира: ' + err.message);
       });
     }
@@ -1730,9 +1576,14 @@
         if (currentPlayer.hashtag) {
           startGame();
         } else {
-          const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
-          showSelection(AVAILABLE_HASHTAGS, taken);
-          updateInfo('Выберите хештег и ник');
+          if (currentPlayer.faction) {
+            hideSelection();
+            factionBtn.click();
+          } else {
+            const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
+            showSelection(AVAILABLE_HASHTAGS, taken);
+            updateInfo('Выберите хештег и ник');
+          }
         }
         hideLoadingScreen();
       })
