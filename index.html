@@ -12,18 +12,9 @@
       touch-action: manipulation;
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     }
-    #canvasContainer {
-      width: 100%; height: 100vh;
-      display: flex; justify-content: center; align-items: center;
-    }
-    canvas {
-      display: block;
-      width: 100%; height: 100%;
-      touch-action: none;
-    }
-    #info, #legend, #menuBtn, #leaderboard, #menuPanel, #selection, #attackPanel, #gameover {
-      position: absolute; z-index: 10;
-    }
+    #canvasContainer { width: 100%; height: 100vh; display: flex; justify-content: center; align-items: center; }
+    canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    #info, #legend, #menuBtn, #leaderboard, #menuPanel, #selection, #attackPanel, #gameover { position: absolute; z-index: 10; }
     #info { top:10px; left:10px; background:rgba(255,255,255,0.9); padding:4px 8px; border-radius:4px; }
     #legend { bottom:20px; left:20px; background:rgba(255,255,255,0.9); padding:8px 12px; border-radius:8px; display:none; align-items:center; gap:8px; }
     #legendColor { width:20px; height:20px; border:1px solid #333; }
@@ -42,9 +33,7 @@
     #gameover { display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:100; justify-content:center; align-items:center; flex-direction:column; color:white; font-size:24px; }
     button { margin:5px; padding:8px 12px; cursor:pointer; font-family:'Courier New',monospace; }
     input[type=range] { width:200px; }
-    @media (hover: none) and (pointer: coarse) {
-      input[type=range] { width: 160px; height: 30px; }
-    }
+    @media (hover: none) and (pointer: coarse) { input[type=range] { width: 160px; height: 30px; } }
     #attackControls { display: flex; align-items: center; justify-content: center; gap: 8px; }
     #alertToast {
       position: absolute; top: 36px; left: 10px;
@@ -507,7 +496,7 @@
       }
     });
 
-    // --- Кнопка фракции ---
+    // --- Кнопка фракции (исправленный обработчик) ---
     factionBtn.addEventListener('click', async () => {
       const res = await fetch(`${SERVER_URL}/faction/info`, {
         method: 'POST',
@@ -524,6 +513,7 @@
       factionTitle.textContent = `Фракция #${res.baseHashtag}`;
       const myMinor = f.minors.find(m => m.occupiedBy === currentPlayer.id);
       const hasMinor = !!myMinor;
+      const isCommander = currentPlayer.hashtag && AVAILABLE_HASHTAGS.includes(currentPlayer.hashtag) && currentPlayer.hashtag === res.baseHashtag;
 
       let leftHtml = '';
       if (f.commander) leftHtml += `<p>Командир: ${f.commander.nickname}</p>`;
@@ -559,15 +549,17 @@
 
       // Кнопка возврата / закрытия
       let closeBtnHtml;
-      if (!hasMinor) {
-        closeBtnHtml = `<button id="closeFactionBtn" style="margin-top:10px;">← Вернуться к выбору основного хештега</button>`;
-      } else {
+      if (isCommander) {
         closeBtnHtml = `<button id="closeFactionBtn" style="margin-top:10px;">Закрыть</button>`;
+      } else if (hasMinor) {
+        closeBtnHtml = `<button id="closeFactionBtn" style="margin-top:10px;">Закрыть</button>`;
+      } else {
+        closeBtnHtml = `<button id="closeFactionBtn" style="margin-top:10px;">← Вернуться к выбору основного хештега</button>`;
       }
       factionContent.insertAdjacentHTML('beforeend', closeBtnHtml);
 
       document.getElementById('closeFactionBtn').addEventListener('click', () => {
-        if (!hasMinor) {
+        if (!isCommander && !hasMinor) {
           fetch(`${SERVER_URL}/faction/leave`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -588,16 +580,12 @@
 
       // Загружаем историю чата фракции
       loadFactionChat(res.baseHashtag);
-
-      // Помечаем, что мы прочитали чат (прячем точку)
       factionLastReadTimestamp = Date.now();
       document.getElementById('factionUnreadDot').style.display = 'none';
-
-      // Запускаем опрос новых сообщений
       if (factionChatPollInterval) clearInterval(factionChatPollInterval);
       factionChatPollInterval = setInterval(() => pollFactionChat(res.baseHashtag), 5000);
 
-      // Кнопка освобождения малого хештега
+      // Кнопка освобождения малого хештега (только если есть занятый малый тег)
       if (hasMinor) {
         const releaseBtnHtml = '<button id="releaseMinorBtn">Освободить хештег</button>';
         factionContent.insertAdjacentHTML('beforeend', releaseBtnHtml);
