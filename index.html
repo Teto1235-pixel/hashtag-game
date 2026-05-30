@@ -46,6 +46,14 @@
     .faction-left { flex: 1; min-width: 200px; }
     .faction-right { flex: 1; min-width: 200px; }
     #factionChatMessages { height: 150px; overflow-y: auto; background: #f0f0f0; margin-top: 5px; padding: 4px; font-size: 12px; }
+    #factionPanel {
+      max-width: 95vw;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    .faction-layout {
+      flex-wrap: nowrap;
+    }
   </style>
 </head>
 <body>
@@ -408,7 +416,8 @@
         }).then(r => r.json());
         if (resp.messages && resp.messages.length > 0) {
           const latest = resp.messages[resp.messages.length - 1];
-          if (latest.timestamp > factionLastReadTimestamp) {
+          // Не показываем уведомление на свои сообщения
+          if (latest.userId !== currentPlayer.id && latest.timestamp > factionLastReadTimestamp) {
             document.getElementById('factionUnreadDot').style.display = 'block';
           }
         }
