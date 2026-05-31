@@ -47,7 +47,7 @@
     .faction-layout { display: flex; gap: 15px; text-align: left; }
     .faction-left { flex: 1; min-width: 200px; }
     .faction-right { flex: 1; min-width: 200px; }
-    #factionChatMessages { height: 150px; overflow-y: auto; background: #f0f0f0; margin-top: 5px; padding: 4px; font-size: 12px; }
+    #factionChatMessages { height: 150px; overflow-y: auto; background: #f0f0f0; margin-top: 5px; padding: 4px; font-size: 24px; }
     #factionPanel {
       max-width: 95vw;
       overflow-x: auto;
@@ -55,6 +55,20 @@
     }
     .faction-layout {
       flex-wrap: nowrap;
+    }
+
+    /* Увеличенные шрифты чатов */
+    #chatMessages, #chatInput, #chatSendBtn {
+      font-size: 24px !important;
+    }
+    #chatMessages {
+      height: 250px;
+    }
+    #factionChatInput, #factionChatSendBtn {
+      font-size: 24px !important;
+    }
+    #factionChatMessages {
+      height: 180px;
     }
 
     /* Книга инструкции */
@@ -93,10 +107,10 @@
   <div id="leaderboard"></div>
 
   <!-- Чат -->
-  <div id="chatPanel" style="display:none; position:absolute; bottom:80px; left:20px; width:260px; max-height:320px; background:rgba(0,0,0,0.75); color:white; border-radius:8px; padding:8px; z-index:15; font-family:'Courier New',monospace;">
-    <div id="chatMessages" style="height:200px; overflow-y:auto; font-size:12px; margin-bottom:5px;"></div>
-    <input type="text" id="chatInput" placeholder="Сообщение..." style="width:100%; box-sizing:border-box; padding:4px; font-size:12px; background:#333; color:white; border:1px solid #555; border-radius:4px;">
-    <button id="chatSendBtn" style="width:100%; margin-top:4px; background:#4d79ff; color:white; border:none; border-radius:4px; padding:4px; cursor:pointer; font-size:12px;">Отправить</button>
+  <div id="chatPanel" style="display:none; position:absolute; bottom:80px; left:20px; width:320px; max-height:400px; background:rgba(0,0,0,0.75); color:white; border-radius:8px; padding:8px; z-index:15; font-family:'Courier New',monospace;">
+    <div id="chatMessages" style="height:250px; overflow-y:auto; font-size:24px; margin-bottom:5px;"></div>
+    <input type="text" id="chatInput" placeholder="Сообщение..." style="width:100%; box-sizing:border-box; padding:4px; font-size:24px; background:#333; color:white; border:1px solid #555; border-radius:4px;">
+    <button id="chatSendBtn" style="width:100%; margin-top:4px; background:#4d79ff; color:white; border:none; border-radius:4px; padding:6px; cursor:pointer; font-size:24px;">Отправить</button>
   </div>
   <button id="chatToggleBtn" style="position:absolute; bottom:80px; left:20px; z-index:15; background:rgba(255,255,255,0.9); border:1px solid #ccc; padding:4px 10px; border-radius:4px; cursor:pointer; font-family:'Courier New',monospace;">
   💬
@@ -122,7 +136,7 @@
  <div id="overlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3); z-index:19;"></div> 
   <div id="selection">
     <h3>Выберите хештег</h3>
-    <div id="hashtagList"></div>
+    <!-- Ник и кнопка информации перенесены наверх -->
     <div id="nicknameBlock" style="margin-bottom:10px;">
       <label style="font-size:14px;">Ваш ник: 
         <input type="text" id="nicknameInput" placeholder="Введите ник" maxlength="16" style="width:120px;">
@@ -130,6 +144,8 @@
       <button id="setNicknameBtn" style="margin-left:5px;">Сохранить</button>
       <span id="nicknameDisplay" style="display:none; margin-left:5px; font-weight:bold;"></span>
     </div>
+    <button id="infoBtn">📖 Информация об игре</button>
+    <div id="hashtagList"></div>
     <p style="font-size:12px; margin:10px 0; color:#555; line-height:1.4;">
       1. Выбери хештег — заспаунишься.<br>
       2. Ресурс — лайки.<br>
@@ -137,7 +153,6 @@
     </p>
     <hr>
     <button id="spectateBtn">👀 Наблюдать</button>
-    <button id="infoBtn">📖 Информация об игре</button>
   </div>
 
   <div id="attackPanel">
@@ -254,6 +269,12 @@
     let lastMessageId = null;
     let factionChatPollInterval = null;
     let factionLastReadTimestamp = 0;
+    let lastChatSendTime = 0;
+    let lastFactionChatSendTime = 0;
+
+    // Для восстановления видимости чата после закрытия выбора
+    let chatWasVisibleBeforeSelection = false;
+    let factionChatWasVisibleBeforeSelection = false;
 
     // UI элементы
     const attackPanel = document.getElementById('attackPanel');
@@ -317,7 +338,7 @@
           attackPanel.style.display = 'none';
           saveBtnDiv.style.display = 'block';
           if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-          showGameEndScreen(leaderboard);   // показываем финальный экран
+          showGameEndScreen(leaderboard);
         }
         return;
       }
@@ -362,8 +383,13 @@
       document.body.removeChild(link);
     });
 
-    // --- Чат ---
+    // --- Чат (общий) ---
     chatSendBtn.addEventListener('click', async () => {
+      const now = Date.now();
+      if (now - lastChatSendTime < 5000) {
+        showAlert('Сообщения можно отправлять раз в 5 секунд');
+        return;
+      }
       const text = chatInput.value.trim();
       if (!text) return;
       try {
@@ -373,6 +399,7 @@
           body: JSON.stringify({ userId: currentPlayer.id, text })
         });
         chatInput.value = '';
+        lastChatSendTime = now;
         fetchChatMessages();
       } catch (e) {
         console.error('Ошибка отправки:', e);
@@ -386,6 +413,7 @@
         chatPanel.style.display = 'block';
         document.getElementById('chatUnreadDot').style.display = 'none';
         lastReadTimestamp = newestMessageTimestamp;
+        setTimeout(() => { chatMessages.scrollTop = chatMessages.scrollHeight; }, 50);
       } else {
         chatPanel.style.display = 'none';
       }
@@ -456,7 +484,6 @@
         }).then(r => r.json());
         if (resp.messages && resp.messages.length > 0) {
           const latest = resp.messages[resp.messages.length - 1];
-          // Не показываем уведомление на свои сообщения
           if (latest.userId !== currentPlayer.id && latest.timestamp > factionLastReadTimestamp) {
             document.getElementById('factionUnreadDot').style.display = 'block';
           }
@@ -512,6 +539,11 @@
           updateInfo('Ошибка сети');
         }
       } else if (btn.id === 'factionChatSendBtn') {
+        const now = Date.now();
+        if (now - lastFactionChatSendTime < 5000) {
+          showAlert('Сообщения можно отправлять раз в 5 секунд');
+          return;
+        }
         const input = document.getElementById('factionChatInput');
         const text = input.value.trim();
         if (!text) return;
@@ -522,6 +554,7 @@
           body: JSON.stringify({ userId: currentPlayer.id, baseHashtag, text })
         });
         input.value = '';
+        lastFactionChatSendTime = now;
         const container = document.getElementById('factionChatMessages');
         const nickname = currentPlayer.nickname || 'Аноним';
         const div = document.createElement('div');
@@ -596,7 +629,6 @@
       factionContent.innerHTML = html;
       factionPanel.style.display = 'block';
 
-      // Кнопка возврата / закрытия
       let closeBtnHtml;
       if (isCommander) {
         closeBtnHtml = `<button id="closeFactionBtn" style="margin-top:10px;">Закрыть</button>`;
@@ -627,14 +659,12 @@
         }
       });
 
-      // Загружаем историю чата фракции
       loadFactionChat(res.baseHashtag);
       factionLastReadTimestamp = Date.now();
       document.getElementById('factionUnreadDot').style.display = 'none';
       if (factionChatPollInterval) clearInterval(factionChatPollInterval);
       factionChatPollInterval = setInterval(() => pollFactionChat(res.baseHashtag), 5000);
 
-      // Кнопка освобождения малого хештега (только если есть занятый малый тег)
       if (hasMinor) {
         const releaseBtnHtml = '<button id="releaseMinorBtn">Освободить хештег</button>';
         factionContent.insertAdjacentHTML('beforeend', releaseBtnHtml);
@@ -1233,6 +1263,11 @@
 
     let selectionRefreshInterval = null;
     function showSelection(hashtags, takenHashtags) {
+      // Скрываем панели чата, чтобы не перекрывали выбор
+      chatWasVisibleBeforeSelection = (chatPanel.style.display === 'block');
+      factionChatWasVisibleBeforeSelection = (factionPanel.style.display === 'block' && document.getElementById('factionChatMessages') !== null);
+      chatPanel.style.display = 'none';
+      factionPanel.style.display = 'none';
       document.getElementById('overlay').style.display = 'block';
       document.getElementById('canvasContainer').style.pointerEvents = 'none';
       const listDiv = document.getElementById('hashtagList');
@@ -1331,6 +1366,9 @@
       document.getElementById('canvasContainer').style.pointerEvents = '';
       if (selectionRefreshInterval) { clearInterval(selectionRefreshInterval); selectionRefreshInterval = null; }
       selectionDiv.style.display = 'none';
+      // Восстанавливаем видимость чатов, если они были открыты
+      if (chatWasVisibleBeforeSelection) chatPanel.style.display = 'block';
+      if (factionChatWasVisibleBeforeSelection) factionPanel.style.display = 'block';
     }
 
     // ---------- ОТРИСОВКА ----------
@@ -1399,6 +1437,7 @@
         }
         ctx.restore();
       }
+      // Отрисовка подчинённых: пунктирные границы только по краям своих клеток + диагональная штриховка
       for (let y = startY; y < endY; y++) {
         for (let x = startX; x < endX; x++) {
           const cell = map[y][x];
@@ -1406,11 +1445,40 @@
             const owner = playersInfo[cell.ownerId];
             if (owner && owner.hashtag && !AVAILABLE_HASHTAGS.includes(owner.hashtag)) {
               ctx.save();
+              // Проверяем соседей: если сосед не принадлежит тому же подчинённому, рисуем пунктирную границу с этой стороны
+              const sameOwner = (nx, ny) => {
+                if (nx < 0 || nx >= MAP_W || ny < 0 || ny >= MAP_H) return false;
+                const ncell = map[ny][nx];
+                return ncell.ownerId === cell.ownerId;
+              };
               ctx.strokeStyle = 'black';
               ctx.lineWidth = 1 / zoom;
               ctx.setLineDash([3 / zoom, 2 / zoom]);
-              ctx.strokeRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-              ctx.setLineDash([]);
+              ctx.beginPath();
+              // Верхняя граница
+              if (!sameOwner(x, y - 1)) {
+                ctx.moveTo(x * CELL_SIZE, y * CELL_SIZE);
+                ctx.lineTo((x + 1) * CELL_SIZE, y * CELL_SIZE);
+              }
+              // Нижняя граница
+              if (!sameOwner(x, y + 1)) {
+                ctx.moveTo(x * CELL_SIZE, (y + 1) * CELL_SIZE);
+                ctx.lineTo((x + 1) * CELL_SIZE, (y + 1) * CELL_SIZE);
+              }
+              // Левая граница
+              if (!sameOwner(x - 1, y)) {
+                ctx.moveTo(x * CELL_SIZE, y * CELL_SIZE);
+                ctx.lineTo(x * CELL_SIZE, (y + 1) * CELL_SIZE);
+              }
+              // Правая граница
+              if (!sameOwner(x + 1, y)) {
+                ctx.moveTo((x + 1) * CELL_SIZE, y * CELL_SIZE);
+                ctx.lineTo((x + 1) * CELL_SIZE, (y + 1) * CELL_SIZE);
+              }
+              ctx.stroke();
+              ctx.setLineDash([]); // сброс
+
+              // Диагональная штриховка
               ctx.beginPath();
               ctx.strokeStyle = 'rgba(0,0,0,0.3)';
               ctx.lineWidth = 0.5 / zoom;
