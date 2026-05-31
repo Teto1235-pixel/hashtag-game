@@ -45,9 +45,16 @@
       font-family: 'Courier New', monospace; white-space: nowrap;
     }
     .faction-layout { display: flex; gap: 15px; text-align: left; }
-    .faction-left { flex: 1; min-width: 200px; }
-    .faction-right { flex: 1; min-width: 200px; }
+    .faction-left { flex: 1; min-width: 150px; max-width: 100%; }
+    .faction-right { flex: 1; min-width: 150px; max-width: 100%; overflow-wrap: break-word; }
     #factionChatMessages { height: 150px; overflow-y: auto; background: #f0f0f0; margin-top: 5px; padding: 4px; font-size: 24px; }
+    #factionChatMessages, #factionChatInput, #donateTarget, #donateAmount {
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+    #factionChatInput {
+      width: 100% !important;
+    }
     #factionPanel {
       max-width: 95vw;
       overflow-x: auto;
@@ -90,6 +97,19 @@
     #infoBook .close-btn {
       position: absolute; top: 10px; right: 15px;
       background: none; border: none; font-size: 24px; cursor: pointer; color: #555;
+    }
+    @media (max-width: 600px) {
+      .faction-layout {
+        flex-direction: column;
+        white-space: normal;   /* разрешаем перенос текста */
+      }
+      .faction-left, .faction-right {
+        min-width: 0;
+        max-width: 100%;
+      }
+      #factionChatMessages {
+        height: 120px;
+      }
     }
   </style>
 </head>
