@@ -100,8 +100,8 @@
     }
     @media (max-width: 600px) {
       .faction-layout {
-        flex-direction: column;
-        white-space: normal;   /* разрешаем перенос текста */
+        flex-direction: column-reverse;
+        white-space: normal;
       }
       .faction-left, .faction-right {
         min-width: 0;
@@ -1806,6 +1806,7 @@
             updateInfo('Выберите хештег и ник');
           }
         }
+        lastReadTimestamp = Date.now(); 
         hideLoadingScreen();
       })
       .catch(err => {
