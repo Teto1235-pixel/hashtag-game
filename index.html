@@ -288,6 +288,7 @@
     let currentMapVersion = 0;
     let lastMessageId = null;
     let factionChatPollInterval = null;
+    let onlineUpdateInterval = null;
     let factionLastReadTimestamp = 0;
     let lastChatSendTime = 0;
     let lastFactionChatSendTime = 0;
@@ -345,6 +346,19 @@
       }
       requestAnimationFrame(loop);
     }
+
+async function updateOnlineCount() {
+  try {
+    const res = await fetch(`${SERVER_URL}/online`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    const data = await res.json();
+    // Меняем текст кнопки меню: "⚙️ 5"
+    menuBtn.textContent = `⚙️ ${data.online}`;
+  } catch (e) {}
+}
 
     // --- Таймер ---
     function updateTimer() {
@@ -1434,28 +1448,47 @@
         for (const b of labelCache.commanders) {
           const centerX = (b.minX + b.maxX) / 2 * CELL_SIZE + CELL_SIZE / 2;
           const centerY = (b.minY + b.maxY) / 2 * CELL_SIZE + CELL_SIZE / 2;
+          const w = (b.maxX - b.minX + 1) * CELL_SIZE;
+          const h = (b.maxY - b.minY + 1) * CELL_SIZE;
           const area = (b.maxX - b.minX + 1) * (b.maxY - b.minY + 1);
           let fontSize = Math.max(12, Math.sqrt(area) * 2.2);
+          
+          // угол диагонали bounding box
+          const angle = Math.atan2(h, w);
+          
+          ctx.save();
+          ctx.translate(centerX, centerY);
+          ctx.rotate(angle);
           ctx.font = `bold ${fontSize}px "Courier New", monospace`;
           ctx.fillStyle = 'rgba(0,0,0,0.6)';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(`#${b.hashtag}`, centerX, centerY - fontSize * 0.2);
+          ctx.fillText(`#${b.hashtag}`, 0, -fontSize * 0.2);
           ctx.font = `${fontSize * 0.6}px "Courier New", monospace`;
-          ctx.fillText(`${b.count}`, centerX, centerY + fontSize * 0.6);
+          ctx.fillText(`${b.count}`, 0, fontSize * 0.6);
+          ctx.restore();
         }
         for (const b of labelCache.minors) {
           const centerX = (b.minX + b.maxX) / 2 * CELL_SIZE + CELL_SIZE / 2;
           const centerY = (b.minY + b.maxY) / 2 * CELL_SIZE + CELL_SIZE / 2;
+          const w = (b.maxX - b.minX + 1) * CELL_SIZE;
+          const h = (b.maxY - b.minY + 1) * CELL_SIZE;
           const area = (b.maxX - b.minX + 1) * (b.maxY - b.minY + 1);
           let fontSize = Math.max(10, Math.sqrt(area) * 1.8);
+          const angle = Math.atan2(h, w);
+          
+          ctx.save();
+          ctx.translate(centerX, centerY);
+          ctx.rotate(angle);
           ctx.font = `bold ${fontSize}px "Courier New", monospace`;
           ctx.fillStyle = 'rgba(0,0,0,0.45)';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(`#${b.hashtag}`, centerX, centerY);
+          ctx.fillText(`#${b.hashtag}`, 0, 0);
+          ctx.restore();
         }
         ctx.restore();
+      }
       }
       // Отрисовка подчинённых: пунктирные границы только по краям своих клеток + диагональная штриховка
       for (let y = startY; y < endY; y++) {
@@ -1740,6 +1773,8 @@
     // ---------- ИНИЦИАЛИЗАЦИЯ ----------
     startRenderLoop();
     showLoadingScreen();
+    updateOnlineCount();                                         // ← первый вызов сразу
+    if (!onlineUpdateInterval) onlineUpdateInterval = setInterval(updateOnlineCount, 60000);
     vkBridge.send('VKWebAppInit')
       .then(() => vkBridge.send('VKWebAppGetUserInfo'))
       .then(data => {
