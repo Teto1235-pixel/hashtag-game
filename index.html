@@ -347,18 +347,17 @@
       requestAnimationFrame(loop);
     }
 
-async function updateOnlineCount() {
-  try {
-    const res = await fetch(`${SERVER_URL}/online`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({})
-    });
-    const data = await res.json();
-    // Меняем текст кнопки меню: "⚙️ 5"
-    menuBtn.textContent = `⚙️ ${data.online}`;
-  } catch (e) {}
-}
+    async function updateOnlineCount() {
+      try {
+        const res = await fetch(`${SERVER_URL}/online`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        const data = await res.json();
+        menuBtn.textContent = `⚙️ ${data.online}`;
+      } catch (e) {}
+    }
 
     // --- Таймер ---
     function updateTimer() {
@@ -1488,7 +1487,6 @@ async function updateOnlineCount() {
           ctx.restore();
         }
         ctx.restore();
-      }
       }
       // Отрисовка подчинённых: пунктирные границы только по краям своих клеток + диагональная штриховка
       for (let y = startY; y < endY; y++) {
