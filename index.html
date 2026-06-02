@@ -77,6 +77,10 @@
     #factionChatMessages {
       height: 180px;
     }
+    #chatSendBtn, #factionChatSendBtn {
+      width: auto !important;
+      padding: 4px 16px;
+    }
 
     /* Книга инструкции */
     #infoOverlay {
@@ -162,7 +166,9 @@
         <input type="text" id="nicknameInput" placeholder="Введите ник" maxlength="16" style="width:120px;">
       </label>
       <button id="setNicknameBtn" style="margin-left:5px;">Сохранить</button>
+      <button id="changeNicknameBtn" style="display:none; margin-left:5px;">Сменить ник</button>
       <span id="nicknameDisplay" style="display:none; margin-left:5px; font-weight:bold;"></span>
+      <span id="nickCooldown" style="font-size:12px; color:#888; margin-left:5px;"></span>
     </div>
     <button id="infoBtn">📖 Информация об игре</button>
     <div id="hashtagList"></div>
@@ -254,7 +260,8 @@
 
     // ---------- СОСТОЯНИЕ ----------
     const currentPlayer = {
-      id: null, likes: 0, color: '#cccccc', hashtag: null, nickname: null, spawnX: 0, spawnY: 0, blockedUntil: 0
+      id: null, likes: 0, color: '#cccccc', hashtag: null, nickname: null,
+      spawnX: 0, spawnY: 0, blockedUntil: 0, lastNickChange: 0
     };
     let map = Array(MAP_H).fill(null).map(() => Array(MAP_W).fill().map(() => ({ ownerId: null, hashtag: '' })));
     let playersInfo = {};
@@ -292,6 +299,8 @@
     let factionLastReadTimestamp = 0;
     let lastChatSendTime = 0;
     let lastFactionChatSendTime = 0;
+    let chatSending = false;
+    let factionChatSending = false;
 
     // Для восстановления видимости чата после закрытия выбора
     let chatWasVisibleBeforeSelection = false;
@@ -395,15 +404,45 @@
       .then(res => {
         if (res.error) return updateInfo(res.error);
         currentPlayer.nickname = nick;
+        currentPlayer.lastNickChange = Date.now();   // запоминаем время смены
         nicknameSet = true;
         document.getElementById('nicknameInput').style.display = 'none';
         document.getElementById('setNicknameBtn').style.display = 'none';
+        document.getElementById('changeNicknameBtn').style.display = 'inline-block';
         document.getElementById('nicknameDisplay').textContent = 'Ник: ' + nick;
         document.getElementById('nicknameDisplay').style.display = 'inline';
+        updateNickCooldown();
         updateInfo(`Привет, ${nick}!`);
       })
       .catch(() => alert('Ошибка сети'));
     });
+
+      document.getElementById('changeNicknameBtn').addEventListener('click', () => {
+      document.getElementById('nicknameInput').style.display = 'inline-block';
+      document.getElementById('setNicknameBtn').style.display = 'inline-block';
+      document.getElementById('changeNicknameBtn').style.display = 'none';
+    });
+
+    function updateNickCooldown() {
+      const btn = document.getElementById('changeNicknameBtn');
+      const cooldownSpan = document.getElementById('nickCooldown');
+      if (!currentPlayer.lastNickChange) {
+        btn.style.display = 'inline-block';
+        cooldownSpan.textContent = '';
+        return;
+      }
+      const elapsed = Date.now() - currentPlayer.lastNickChange;
+      const remaining = 24 * 60 * 60 * 1000 - elapsed;
+      if (remaining <= 0) {
+        btn.style.display = 'inline-block';
+        cooldownSpan.textContent = '';
+      } else {
+        btn.style.display = 'none';
+        const hours = Math.ceil(remaining / 3600000);
+        cooldownSpan.textContent = `(можно через ${hours} ч)`;
+      }
+    }
+    setInterval(updateNickCooldown, 60000);
 
     // --- Сохранение карты ---
     document.getElementById('saveMapBtn').addEventListener('click', () => {
@@ -418,6 +457,7 @@
 
     // --- Чат (общий) ---
     chatSendBtn.addEventListener('click', async () => {
+      if (chatSending) return;
       const now = Date.now();
       if (now - lastChatSendTime < 5000) {
         showAlert('Сообщения можно отправлять раз в 5 секунд');
@@ -425,6 +465,7 @@
       }
       const text = chatInput.value.trim();
       if (!text) return;
+      chatSending = true;
       try {
         await fetch(`${SERVER_URL}/chat`, {
           method: 'POST',
@@ -436,6 +477,8 @@
         fetchChatMessages();
       } catch (e) {
         console.error('Ошибка отправки:', e);
+      } finally {
+        chatSending = false;
       }
     });
     chatInput.addEventListener('keypress', (e) => {
@@ -552,7 +595,7 @@
         } catch (err) {
           updateInfo('Ошибка сети');
         }
-      } else if (action === 'donate') {
+    } else if (action === 'donate') {
         const target = document.getElementById('donateTarget')?.value;
         const amount = parseInt(document.getElementById('donateAmount')?.value);
         if (!target || !amount || amount < 1) return;
@@ -572,6 +615,7 @@
           updateInfo('Ошибка сети');
         }
       } else if (btn.id === 'factionChatSendBtn') {
+        if (factionChatSending) return;
         const now = Date.now();
         if (now - lastFactionChatSendTime < 5000) {
           showAlert('Сообщения можно отправлять раз в 5 секунд');
@@ -580,20 +624,27 @@
         const input = document.getElementById('factionChatInput');
         const text = input.value.trim();
         if (!text) return;
-        const baseHashtag = factionContent.dataset.base;
-        await fetch(`${SERVER_URL}/faction/chat/send`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: currentPlayer.id, baseHashtag, text })
-        });
-        input.value = '';
-        lastFactionChatSendTime = now;
-        const container = document.getElementById('factionChatMessages');
-        const nickname = currentPlayer.nickname || 'Аноним';
-        const div = document.createElement('div');
-        div.textContent = `${nickname}: ${text}`;
-        container.appendChild(div);
-        container.scrollTop = container.scrollHeight;
+        factionChatSending = true;
+        try {
+          const baseHashtag = factionContent.dataset.base;
+          await fetch(`${SERVER_URL}/faction/chat/send`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: currentPlayer.id, baseHashtag, text })
+          });
+          input.value = '';
+          lastFactionChatSendTime = now;
+          const container = document.getElementById('factionChatMessages');
+          const nickname = currentPlayer.nickname || 'Аноним';
+          const div = document.createElement('div');
+          div.textContent = `${nickname}: ${text}`;
+          container.appendChild(div);
+          container.scrollTop = container.scrollHeight;
+        } catch (err) {
+          console.error('Ошибка отправки:', err);
+        } finally {
+          factionChatSending = false;
+        }
       }
     });
 
@@ -1161,6 +1212,7 @@
           document.getElementById('nicknameDisplay').style.display = 'inline';
         }
         if (data.player.blockedUntil !== undefined) currentPlayer.blockedUntil = data.player.blockedUntil;
+        if (data.player.lastNickChange !== undefined) currentPlayer.lastNickChange = data.player.lastNickChange;
       }
       if (data.playersInfo) playersInfo = data.playersInfo;
       if (data.worldW) MAP_W = data.worldW; if (data.worldH) MAP_H = data.worldH;
@@ -1451,10 +1503,15 @@
           const h = (b.maxY - b.minY + 1) * CELL_SIZE;
           const area = (b.maxX - b.minX + 1) * (b.maxY - b.minY + 1);
           let fontSize = Math.max(12, Math.sqrt(area) * 2.2);
-          
-          // угол диагонали bounding box
-          const angle = Math.atan2(h, w);
-          
+          let angle = 0;
+          // Горизонтально, если ширина сильно больше высоты
+          if (w > h * 2) {
+            angle = 0;
+          } else if (h > w * 2) {
+            angle = Math.PI / 2;
+          } else {
+            angle = Math.atan2(h, w);
+          }
           ctx.save();
           ctx.translate(centerX, centerY);
           ctx.rotate(angle);
@@ -1474,8 +1531,14 @@
           const h = (b.maxY - b.minY + 1) * CELL_SIZE;
           const area = (b.maxX - b.minX + 1) * (b.maxY - b.minY + 1);
           let fontSize = Math.max(10, Math.sqrt(area) * 1.8);
-          const angle = Math.atan2(h, w);
-          
+          let angle = 0;
+          if (w > h * 2) {
+            angle = 0;
+          } else if (h > w * 2) {
+            angle = Math.PI / 2;
+          } else {
+            angle = Math.atan2(h, w);
+          }
           ctx.save();
           ctx.translate(centerX, centerY);
           ctx.rotate(angle);
