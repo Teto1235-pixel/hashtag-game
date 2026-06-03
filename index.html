@@ -815,7 +815,7 @@
           if (!owner) continue;
           let b = ownerMap.get(owner);
           if (!b) {
-            b = { minX: x, minY: y, maxX: x, maxY: y, count: 0 };
+            b = { minX: x, minY: y, maxX: x, maxY: y, count: 0, sumX: 0, sumY: 0 };
             ownerMap.set(owner, b);
           } else {
             if (x < b.minX) b.minX = x;
@@ -823,12 +823,14 @@
             if (x > b.maxX) b.maxX = x;
             if (y > b.maxY) b.maxY = y;
           }
+          b.sumX += x;
+          b.sumY += y;
           b.count++;
         }
       }
       territoryBoundsCache = {};
       for (const [owner, b] of ownerMap.entries()) {
-        territoryBoundsCache[owner] = { minX: b.minX, minY: b.minY, maxX: b.maxX, maxY: b.maxY, count: b.count };
+        territoryBoundsCache[owner] = { minX: b.minX, minY: b.minY, maxX: b.maxX, maxY: b.maxY, count: b.count, sumX: b.sumX, sumY: b.sumY };
       }
       myCells = [];
       const isCommander = currentPlayer.hashtag && AVAILABLE_HASHTAGS.includes(currentPlayer.hashtag);
@@ -856,10 +858,10 @@
       for (const [owner, bounds] of ownerMap.entries()) {
         const info = playersInfo[owner];
         if (!info || !info.hashtag) continue;
-        if (AVAILABLE_HASHTAGS.includes(info.hashtag)) {
+         if (AVAILABLE_HASHTAGS.includes(info.hashtag)) {
           const base = info.hashtag;
           if (!factionBounds[base]) {
-            factionBounds[base] = { minX: bounds.minX, minY: bounds.minY, maxX: bounds.maxX, maxY: bounds.maxY, count: 0, hashtag: base };
+            factionBounds[base] = { minX: bounds.minX, minY: bounds.minY, maxX: bounds.maxX, maxY: bounds.maxY, count: 0, sumX: 0, sumY: 0, hashtag: base };
           }
           const fb = factionBounds[base];
           if (bounds.minX < fb.minX) fb.minX = bounds.minX;
@@ -867,6 +869,8 @@
           if (bounds.maxX > fb.maxX) fb.maxX = bounds.maxX;
           if (bounds.maxY > fb.maxY) fb.maxY = bounds.maxY;
           fb.count += bounds.count;
+          fb.sumX += bounds.sumX;
+          fb.sumY += bounds.sumY;
         } else {
           minorBounds.push({ ...bounds, hashtag: info.hashtag, owner });
         }
@@ -1249,6 +1253,10 @@
         updateOffscreenForChanges(data.changedCells);
         rebuildTerritoryCache();
         updateAdjacentSet();
+        // ★ Обновляем лайки сразу, не дожидаясь синхронизации
+        if (data.player && data.player.likes !== undefined) {
+          currentPlayer.likes = data.player.likes;
+        }
         needsRedraw = true;
         updateInfo(`Лайков: ${currentPlayer.likes}`);
         return;
@@ -1287,7 +1295,7 @@
           hideSelection();
           if (window.stateInterval) clearInterval(window.stateInterval);
           if (window.chatInterval) clearInterval(window.chatInterval);
-          window.stateInterval = setInterval(fetchState, 10000);
+          window.stateInterval = setInterval(fetchState, 5000);
           window.chatInterval = setInterval(fetchChatMessages, 10000);
           updateInfo(`Лайков: ${currentPlayer.likes}`);
           needsRedraw = true;
@@ -1497,8 +1505,8 @@
       if (!animating && labelCache) {
         ctx.save();
         for (const b of labelCache.commanders) {
-          const centerX = (b.minX + b.maxX) / 2 * CELL_SIZE + CELL_SIZE / 2;
-          const centerY = (b.minY + b.maxY) / 2 * CELL_SIZE + CELL_SIZE / 2;
+          const centerX = (b.sumX / b.count) * CELL_SIZE + CELL_SIZE / 2;
+          const centerY = (b.sumY / b.count) * CELL_SIZE + CELL_SIZE / 2;
           const w = (b.maxX - b.minX + 1) * CELL_SIZE;
           const h = (b.maxY - b.minY + 1) * CELL_SIZE;
           const area = (b.maxX - b.minX + 1) * (b.maxY - b.minY + 1);
@@ -1525,8 +1533,8 @@
           ctx.restore();
         }
         for (const b of labelCache.minors) {
-          const centerX = (b.minX + b.maxX) / 2 * CELL_SIZE + CELL_SIZE / 2;
-          const centerY = (b.minY + b.maxY) / 2 * CELL_SIZE + CELL_SIZE / 2;
+          const centerX = (b.sumX / b.count) * CELL_SIZE + CELL_SIZE / 2;
+          const centerY = (b.sumY / b.count) * CELL_SIZE + CELL_SIZE / 2;
           const w = (b.maxX - b.minX + 1) * CELL_SIZE;
           const h = (b.maxY - b.minY + 1) * CELL_SIZE;
           const area = (b.maxX - b.minX + 1) * (b.maxY - b.minY + 1);
@@ -1730,7 +1738,7 @@
         fetchState();
         if (window.stateInterval) clearInterval(window.stateInterval);
         if (window.chatInterval) clearInterval(window.chatInterval);
-        window.stateInterval = setInterval(fetchState, 10000);
+        window.stateInterval = setInterval(fetchState, 5000);
         window.chatInterval = setInterval(fetchChatMessages, 10000);
         window.addEventListener('beforeunload', () => {
           clearInterval(window.stateInterval);
