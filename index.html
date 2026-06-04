@@ -1314,6 +1314,10 @@
       .then(r => r.json())
       .then(res => {
         attackInProgress = false;
+        // ★ Немедленно обновляем лайки
+        if (res.player && res.player.likes !== undefined) {
+          currentPlayer.likes = res.player.likes;
+        }
         if (res.success) {
           updateInfo(`Захвачено ${res.capturedCells.length} клеток, потрачено ${res.spent} лайков`);
           applyServerResponse(res, res.capturedCells);
@@ -1322,7 +1326,10 @@
           applyServerResponse(res, null);
         }
       })
-      .catch(() => { attackInProgress = false; updateInfo('⚠️ Ошибка сети при атаке'); });
+      .catch(() => {
+        attackInProgress = false;
+        updateInfo('⚠️ Ошибка сети при атаке');
+      });
     }
 
     function fetchState() {
@@ -1860,6 +1867,11 @@
         if (state.gameOver) {
           hideLoadingScreen();
           showGameEndScreen(state.leaderboard || []);
+          return;
+        }
+        if (state.blocked) {
+          hideLoadingScreen();
+          updateInfo('⛔ Вы заблокированы в этой игре');
           return;
         }
         if (state.player) {
