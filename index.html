@@ -1198,6 +1198,14 @@
     // ---------- СЕРВЕРНЫЕ ЗАПРОСЫ ----------
     function applyServerResponse(data, capturedCells) {
       if (data.mapVersion !== undefined) currentMapVersion = data.mapVersion;
+      if (data.blocked) {
+        updateInfo('⛔ Вы заблокированы в этой игре');
+        // останавливаем все интервалы
+        if (window.stateInterval) { clearInterval(window.stateInterval); window.stateInterval = null; }
+        if (window.chatInterval) { clearInterval(window.chatInterval); window.chatInterval = null; }
+        if (factionChatPollInterval) { clearInterval(factionChatPollInterval); factionChatPollInterval = null; }
+        return;
+      }
       if (data.faction !== undefined) currentPlayer.faction = data.faction;
       else if (data.player && data.player.faction !== undefined) currentPlayer.faction = data.player.faction;
       if (data.player) {
