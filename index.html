@@ -1197,19 +1197,23 @@
 
     // ---------- СЕРВЕРНЫЕ ЗАПРОСЫ ----------
     function applyServerResponse(data, capturedCells) {
-      if (data.mapVersion !== undefined) currentMapVersion = data.mapVersion;
-            // Игнорируем устаревший ответ
-      if (data.mapVersion !== undefined && data.mapVersion < currentMapVersion) {
-        return;
+      // *** Сначала проверяем версию, потом обновляем ***
+      if (data.mapVersion !== undefined) {
+        if (data.mapVersion < currentMapVersion) {
+          // Устаревший ответ – игнорируем
+          return;
+        }
+        currentMapVersion = data.mapVersion;
       }
+
       if (data.blocked) {
         updateInfo('⛔ Вы заблокированы в этой игре');
-        // останавливаем все интервалы
         if (window.stateInterval) { clearInterval(window.stateInterval); window.stateInterval = null; }
         if (window.chatInterval) { clearInterval(window.chatInterval); window.chatInterval = null; }
         if (factionChatPollInterval) { clearInterval(factionChatPollInterval); factionChatPollInterval = null; }
         return;
       }
+
       if (data.faction !== undefined) currentPlayer.faction = data.faction;
       else if (data.player && data.player.faction !== undefined) currentPlayer.faction = data.player.faction;
       if (data.player) {
@@ -1265,10 +1269,6 @@
         updateOffscreenForChanges(data.changedCells);
         rebuildTerritoryCache();
         updateAdjacentSet();
-        // ★ Обновляем лайки сразу, не дожидаясь синхронизации
-        if (data.player && data.player.likes !== undefined) {
-          currentPlayer.likes = data.player.likes;
-        }
         needsRedraw = true;
         updateInfo(`Лайков: ${currentPlayer.likes}`);
         return;
