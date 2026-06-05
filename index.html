@@ -586,7 +586,7 @@
             currentPlayer.hashtag = resp.minorTag;
             currentPlayer.likes = resp.player.likes;
             currentPlayer.faction = base;
-            applyServerResponse(resp, null);
+            applyServerResponse(resp);
             factionPanel.style.display = 'none';
             startGame();
           } else {
@@ -1180,7 +1180,7 @@
           currentPlayer.faction = null;
           currentPlayer.hashtag = null;
           currentPlayer.likes = 0;
-          applyServerResponse(res, null);
+          applyServerResponse(res);
           setTimeout(() => fetchState(), 1000);
           menuPanel.style.display = 'none';
           updateInfo('Хештег освобождён. Ваши клетки стали нейтральными.');
@@ -1196,15 +1196,17 @@
     });
 
     // ---------- СЕРВЕРНЫЕ ЗАПРОСЫ ----------
-    function applyServerResponse(data, capturedCells) {
-      // *** Сначала проверяем версию, потом обновляем ***
-      if (data.mapVersion !== undefined) {
-        if (data.mapVersion < currentMapVersion) {
-          // Устаревший ответ – игнорируем
-          return;
-        }
-        currentMapVersion = data.mapVersion;
+    function applyServerResponse(data) {
+    // *** Жёсткая проверка: если версии нет — ответ не применяем ***
+      if (data.mapVersion === undefined) {
+        console.warn('Ответ без mapVersion – игнорируем');
+        return;
       }
+      if (data.mapVersion < currentMapVersion) {
+        // Устаревший ответ – игнорируем
+        return;
+      }
+      currentMapVersion = data.mapVersion;
 
       if (data.blocked) {
         updateInfo('⛔ Вы заблокированы в этой игре');
@@ -1262,8 +1264,10 @@
       if (data.changedCells && data.changedCells.length) {
         for (const ch of data.changedCells) {
           if (ch.x >= 0 && ch.x < MAP_W && ch.y >= 0 && ch.y < MAP_H) {
-            map[ch.y][ch.x].ownerId = ch.ownerId;
-            map[ch.y][ch.x].hashtag = ch.hashtag;
+            if (map[ch.y] && map[ch.y][ch.x]) {
+              map[ch.y][ch.x].ownerId = ch.ownerId;
+              map[ch.y][ch.x].hashtag = ch.hashtag;
+            }
           }
         }
         updateOffscreenForChanges(data.changedCells);
@@ -1278,18 +1282,9 @@
         rebuildTerritoryCache();
         updateAdjacentSet();
         needsRedraw = true;
-        updateInfo(`Лайков: ${currentPlayer.likes}`);
-      } else if (capturedCells?.length && data.map && Array.isArray(data.map)) {
-        map = data.map;
-        rebuildOffscreen();
-        rebuildTerritoryCache();
-        updateAdjacentSet();
-        needsRedraw = true;
-        updateInfo(`Лайков: ${currentPlayer.likes}`);
       } else {
         updateAdjacentSet();
         needsRedraw = true;
-        updateInfo(`Лайков: ${currentPlayer.likes}`);
       }
     }
 
@@ -1302,7 +1297,7 @@
           currentPlayer.spawnX = res.player.spawnX; currentPlayer.spawnY = res.player.spawnY;
           spectating = false;
           resizeCanvas();
-          applyServerResponse(res, null);
+          applyServerResponse(res);
           hideSelection();
           if (window.stateInterval) clearInterval(window.stateInterval);
           if (window.chatInterval) clearInterval(window.chatInterval);
@@ -1327,10 +1322,10 @@
         attackInProgress = false;
         if (res.success) {
           updateInfo(`Захвачено ${res.capturedCells.length} клеток, потрачено ${res.spent} лайков`);
-          applyServerResponse(res, res.capturedCells);
+          applyServerResponse(res);
         } else {
           updateInfo(`Ошибка: ${res.error}`);
-          applyServerResponse(res, null);
+          applyServerResponse(res);
         }
       })
       .catch(() => {
@@ -1348,7 +1343,7 @@
       })
       .then(r => r.json())
       .then(data => {
-        applyServerResponse(data, null);
+        applyServerResponse(data);
         if (!data.changedCells && !data.map) needsRedraw = true;
       })
       .catch(err => console.error('Ошибка sync:', err));
@@ -1370,6 +1365,11 @@
 
     let selectionRefreshInterval = null;
     function showSelection(hashtags, takenHashtags) {
+        // Гарантированно очищаем предыдущий интервал, если он есть
+     if (selectionRefreshInterval) {
+      clearInterval(selectionRefreshInterval);
+      selectionRefreshInterval = null;
+     }
       // Скрываем панели чата, чтобы не перекрывали выбор
       chatWasVisibleBeforeSelection = (chatPanel.style.display === 'block');
       factionChatWasVisibleBeforeSelection = (factionPanel.style.display === 'block' && document.getElementById('factionChatMessages') !== null);
@@ -1449,7 +1449,6 @@
         });
       }
       buildList(hashtagLikes);
-      if (selectionRefreshInterval) clearInterval(selectionRefreshInterval);
       selectionRefreshInterval = setInterval(async () => {
         try {
           const res = await fetch(`${SERVER_URL}/state`, {
@@ -1690,17 +1689,6 @@
       toast.style.display = 'block';
       if (alertTimer) clearTimeout(alertTimer);
       alertTimer = setTimeout(() => { toast.style.display = 'none'; }, 1000);
-    }
-
-    function animateCapture(cells, serverMap) {
-      if (!Array.isArray(serverMap)) { animating = false; return; }
-      map = serverMap;
-      rebuildOffscreen();
-      rebuildTerritoryCache();
-      updateAdjacentSet();
-      needsRedraw = true;
-      updateInfo(`Лайков: ${currentPlayer.likes}`);
-      animating = false;
     }
 
     function showLoadingScreen() {
