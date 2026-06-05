@@ -1198,6 +1198,10 @@
     // ---------- СЕРВЕРНЫЕ ЗАПРОСЫ ----------
     function applyServerResponse(data, capturedCells) {
       if (data.mapVersion !== undefined) currentMapVersion = data.mapVersion;
+            // Игнорируем устаревший ответ
+      if (data.mapVersion !== undefined && data.mapVersion < currentMapVersion) {
+        return;
+      }
       if (data.blocked) {
         updateInfo('⛔ Вы заблокированы в этой игре');
         // останавливаем все интервалы
@@ -1322,10 +1326,6 @@
       .then(r => r.json())
       .then(res => {
         attackInProgress = false;
-        // ★ Немедленно обновляем лайки
-        if (res.player && res.player.likes !== undefined) {
-          currentPlayer.likes = res.player.likes;
-        }
         if (res.success) {
           updateInfo(`Захвачено ${res.capturedCells.length} клеток, потрачено ${res.spent} лайков`);
           applyServerResponse(res, res.capturedCells);
