@@ -1322,7 +1322,7 @@
         attackInProgress = false;
         if (res.success) {
           applyServerResponse(res);
-          updateInfo(`Захвачено ${res.capturedCells.length} клеток, потрачено ${res.spent} лайков`);
+        showAlert(`✅ Захвачено ${res.capturedCells.length} клеток, −${res.spent} ❤️`); 
         } else {
           updateInfo(`Ошибка: ${res.error}`);
           applyServerResponse(res);
