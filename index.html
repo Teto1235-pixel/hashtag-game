@@ -1318,11 +1318,11 @@
         body: JSON.stringify({ userId: currentPlayer.id, x, y, amount })
       })
       .then(r => r.json())
-      .then(res => {
+     .then(res => {
         attackInProgress = false;
         if (res.success) {
-          updateInfo(`Захвачено ${res.capturedCells.length} клеток, потрачено ${res.spent} лайков`);
           applyServerResponse(res);
+          updateInfo(`Захвачено ${res.capturedCells.length} клеток, потрачено ${res.spent} лайков`);
         } else {
           updateInfo(`Ошибка: ${res.error}`);
           applyServerResponse(res);
