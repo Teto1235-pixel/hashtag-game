@@ -1220,6 +1220,7 @@
       else if (data.player && data.player.faction !== undefined) currentPlayer.faction = data.player.faction;
       if (data.player) {
         currentPlayer.likes = data.player.likes;
+        updateInfo(`Лайков: ${currentPlayer.likes}`);
         if (!currentPlayer.hashtag && data.player.hashtag) currentPlayer.hashtag = data.player.hashtag;
         if (data.player.spawnX !== undefined) { currentPlayer.spawnX = data.player.spawnX; currentPlayer.spawnY = data.player.spawnY; }
         if (data.player.hashtag !== undefined) {
