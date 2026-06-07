@@ -1449,20 +1449,24 @@
         });
       }
       buildList(hashtagLikes);
-      selectionRefreshInterval = setInterval(async () => {
-        try {
-          const res = await fetch(`${SERVER_URL}/state`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: currentPlayer.id })
-          }).then(r => r.json());
-          if (res.hashtagLikes) {
-            hashtagLikes = res.hashtagLikes;
-            if (res.player) currentPlayer.blockedUntil = res.player.blockedUntil || 0;
-            buildList(hashtagLikes);
-          }
-        } catch (e) {}
-      }, 5000);
+ selectionRefreshInterval = setInterval(async () => {
+  try {
+    const res = await fetch(`${SERVER_URL}/state`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: currentPlayer.id })
+    }).then(r => r.json());
+    
+    if (res.hashtagLikes) {
+      hashtagLikes = res.hashtagLikes;
+      // ★ Добавь обновление playersInfo
+      if (res.playersInfo) playersInfo = res.playersInfo;
+      if (res.player) currentPlayer.blockedUntil = res.player.blockedUntil || 0;
+      // ★ Перерисуй список (это уже есть)
+      buildList(hashtagLikes);
+    }
+  } catch (e) {}
+}, 5000);
       spectateBtn.onclick = spectate;
       selectionDiv.style.display = 'block';
     }
