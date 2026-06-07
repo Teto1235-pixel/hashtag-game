@@ -1235,6 +1235,7 @@
         }
         if (data.player.blockedUntil !== undefined) currentPlayer.blockedUntil = data.player.blockedUntil;
         if (data.player.lastNickChange !== undefined) currentPlayer.lastNickChange = data.player.lastNickChange;
+        updateInfo(`Лайков: ${currentPlayer.likes}`);
       }
       if (data.playersInfo) playersInfo = data.playersInfo;
       if (data.worldW) MAP_W = data.worldW; if (data.worldH) MAP_H = data.worldH;
