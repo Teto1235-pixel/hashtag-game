@@ -1527,60 +1527,80 @@ function claimHashtag(hashtag) {
           ctx.strokeRect(cx * CELL_SIZE, cy * CELL_SIZE, CELL_SIZE, CELL_SIZE);
         });
       }
-      if (!animating && labelCache) {
-        ctx.save();
-        for (const b of labelCache.commanders) {
-          const centerX = (b.minX + b.maxX) / 2 * CELL_SIZE + CELL_SIZE / 2;
-          const centerY = (b.minY + b.maxY) / 2 * CELL_SIZE + CELL_SIZE / 2;
-          const w = (b.maxX - b.minX + 1) * CELL_SIZE;
-          const h = (b.maxY - b.minY + 1) * CELL_SIZE;
-          const area = (b.maxX - b.minX + 1) * (b.maxY - b.minY + 1);
+if (!animating && labelCache) {
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
 
-          // Подбираем размер шрифта так, чтобы надпись влезала в прямоугольник
-          let fontSize = Math.max(8, Math.sqrt(area) * 2.2);   // базовое значение
-          ctx.font = `bold ${fontSize}px "Courier New", monospace`;
-          const nameWidth = ctx.measureText(`#${b.hashtag}`).width;
-          const countWidth = ctx.measureText(`${b.count}`).width;
+  // Отрисовка командиров (основные хештеги)
+  for (const b of labelCache.commanders) {
+    const centerX = (b.minX + b.maxX) / 2 * CELL_SIZE + CELL_SIZE / 2;
+    const centerY = (b.minY + b.maxY) / 2 * CELL_SIZE + CELL_SIZE / 2;
+    const rectW = (b.maxX - b.minX + 1) * CELL_SIZE;
+    const rectH = (b.maxY - b.minY + 1) * CELL_SIZE;
 
-          // Уменьшаем шрифт, пока подпись (имя + число) не поместится по ширине и высоте
-          while (fontSize > 8 && (nameWidth > w * 0.85 || countWidth > w * 0.85 || fontSize * 1.6 > h)) {
-            fontSize -= 1;
-            ctx.font = `bold ${fontSize}px "Courier New", monospace`;
-          }
+    // Пропускаем очень маленькие территории (менее 3 клеток)
+    if (rectW < CELL_SIZE * 2.5 || rectH < CELL_SIZE * 2.5) continue;
 
-          ctx.font = `bold ${fontSize}px "Courier New", monospace`;
-          ctx.fillStyle = 'rgba(0,0,0,0.6)';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(`#${b.hashtag}`, centerX, centerY - fontSize * 0.3);
-          ctx.font = `${fontSize * 0.6}px "Courier New", monospace`;
-          ctx.fillText(`${b.count}`, centerX, centerY + fontSize * 0.5);
-        }
+    // Основной текст: "#хештег"
+    const mainText = `#${b.hashtag}`;
+    // Дополнительный текст: количество клеток
+    const subText = `${b.count}`;
 
-        for (const b of labelCache.minors) {
-          const centerX = (b.minX + b.maxX) / 2 * CELL_SIZE + CELL_SIZE / 2;
-          const centerY = (b.minY + b.maxY) / 2 * CELL_SIZE + CELL_SIZE / 2;
-          const w = (b.maxX - b.minX + 1) * CELL_SIZE;
-          const h = (b.maxY - b.minY + 1) * CELL_SIZE;
-          const area = (b.maxX - b.minX + 1) * (b.maxY - b.minY + 1);
+    // Подбираем размер шрифта так, чтобы оба текста влезли по ширине и высоте
+    let fontSize = Math.min(48, Math.max(8, Math.sqrt(b.count) * 3));
+    ctx.font = `bold ${fontSize}px "Courier New", monospace`;
 
-          let fontSize = Math.max(8, Math.sqrt(area) * 1.8);
-          ctx.font = `bold ${fontSize}px "Courier New", monospace`;
-          const nameWidth = ctx.measureText(`#${b.hashtag}`).width;
+    // Проверяем, помещается ли основной текст по ширине
+    let mainWidth = ctx.measureText(mainText).width;
+    let subWidth = ctx.measureText(subText).width;
+    let maxTextWidth = Math.max(mainWidth, subWidth);
 
-          while (fontSize > 8 && (nameWidth > w * 0.85 || fontSize * 1.4 > h)) {
-            fontSize -= 1;
-            ctx.font = `bold ${fontSize}px "Courier New", monospace`;
-          }
+    // Уменьшаем шрифт, пока текст не влезет в границы (с отступом 10%)
+    while (fontSize > 8 && (maxTextWidth > rectW * 0.9 || fontSize * 1.8 > rectH)) {
+      fontSize -= 1;
+      ctx.font = `bold ${fontSize}px "Courier New", monospace`;
+      mainWidth = ctx.measureText(mainText).width;
+      subWidth = ctx.measureText(subText).width;
+      maxTextWidth = Math.max(mainWidth, subWidth);
+    }
 
-          ctx.font = `bold ${fontSize}px "Courier New", monospace`;
-          ctx.fillStyle = 'rgba(0,0,0,0.45)';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(`#${b.hashtag}`, centerX, centerY);
-        }
-        ctx.restore();
-      }
+    // Рисуем основной текст
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillText(mainText, centerX, centerY - fontSize * 0.2);
+
+    // Рисуем количество клеток чуть ниже и меньшим шрифтом
+    ctx.font = `${Math.max(8, fontSize * 0.7)}px "Courier New", monospace`;
+    ctx.fillStyle = 'rgba(0,0,0,0.9)';
+    ctx.fillText(subText, centerX, centerY + fontSize * 0.5);
+  }
+
+  // Отрисовка подчинённых (малые хештеги)
+  for (const b of labelCache.minors) {
+    const centerX = (b.minX + b.maxX) / 2 * CELL_SIZE + CELL_SIZE / 2;
+    const centerY = (b.minY + b.maxY) / 2 * CELL_SIZE + CELL_SIZE / 2;
+    const rectW = (b.maxX - b.minX + 1) * CELL_SIZE;
+    const rectH = (b.maxY - b.minY + 1) * CELL_SIZE;
+
+    // Пропускаем слишком маленькие территории (менее 2 клеток)
+    if (rectW < CELL_SIZE * 2 || rectH < CELL_SIZE * 2) continue;
+
+    const text = `#${b.hashtag}`;
+    let fontSize = Math.min(32, Math.max(8, Math.sqrt(b.count) * 2.5));
+    ctx.font = `bold ${fontSize}px "Courier New", monospace`;
+
+    let textWidth = ctx.measureText(text).width;
+    while (fontSize > 8 && (textWidth > rectW * 0.9 || fontSize * 1.4 > rectH)) {
+      fontSize -= 1;
+      ctx.font = `bold ${fontSize}px "Courier New", monospace`;
+      textWidth = ctx.measureText(text).width;
+    }
+
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillText(text, centerX, centerY);
+  }
+  ctx.restore();
+}
       // Отрисовка подчинённых: пунктирные границы только по краям своих клеток + диагональная штриховка
       for (let y = startY; y < endY; y++) {
         for (let x = startX; x < endX; x++) {
