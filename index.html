@@ -1942,6 +1942,7 @@ const authRes = await fetch(`${SERVER_URL}/auth`, {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}) // userId не передаём
     });
+    console.log('Sending request to', url, 'with token:', storedToken);
     if (!joinRes.ok) throw new Error(`Ошибка сервера: ${joinRes.status}`);
     const state = await joinRes.json();
 
