@@ -395,11 +395,11 @@
     document.getElementById('setNicknameBtn').addEventListener('click', () => {
       const nick = document.getElementById('nicknameInput').value.trim();
       if (!nick) return updateInfo('Введите ник');
-      fetch(`${SERVER_URL}/nickname`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentPlayer.id, nickname: nick })
-      })
+      authFetch(`${SERVER_URL}/nickname`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ nickname: nick })
+})
       .then(r => r.json())
       .then(res => {
         if (res.error) return updateInfo(res.error);
@@ -467,11 +467,11 @@
       if (!text) return;
       chatSending = true;
       try {
-        await fetch(`${SERVER_URL}/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: currentPlayer.id, text })
-        });
+        await authFetch(`${SERVER_URL}/chat`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ text })
+});
         chatInput.value = '';
         lastChatSendTime = now;
         fetchChatMessages();
@@ -497,11 +497,11 @@
 
     async function fetchChatMessages() {
       try {
-        const res = await fetch(`${SERVER_URL}/chat/get`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ afterId: lastMessageId })
-        }).then(r => r.json());
+        const res = await authFetch(`${SERVER_URL}/chat/get`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ afterId: lastMessageId })
+}).then(r => r.json());
         if (res.messages && res.messages.length > 0) {
           let maxTs = 0;
           for (const msg of res.messages) {
@@ -532,11 +532,11 @@
       if (!container) return;
       container.innerHTML = '';
       try {
-        const resp = await fetch(`${SERVER_URL}/faction/chat/get`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ baseHashtag })
-        }).then(r => r.json());
+        const resp = await authFetch(`${SERVER_URL}/faction/chat/get`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ baseHashtag })
+}).then(r => r.json());
         if (resp.messages && resp.messages.length > 0) {
           for (const msg of resp.messages) {
             const div = document.createElement('div');
@@ -553,11 +553,11 @@
     async function pollFactionChat(baseHashtag) {
       if (!baseHashtag) return;
       try {
-        const resp = await fetch(`${SERVER_URL}/faction/chat/get`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ baseHashtag })
-        }).then(r => r.json());
+       const resp = await authFetch(`${SERVER_URL}/faction/chat/get`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ baseHashtag })
+}).then(r => r.json());
         if (resp.messages && resp.messages.length > 0) {
           const latest = resp.messages[resp.messages.length - 1];
           if (latest.userId !== currentPlayer.id && latest.timestamp > factionLastReadTimestamp) {
@@ -577,11 +577,11 @@
         const base = btn.dataset.base;
         if (!tag || !base) return;
         try {
-          const resp = await fetch(`${SERVER_URL}/faction/claim`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: currentPlayer.id, baseHashtag: base, minorTag: tag })
-          }).then(r => r.json());
+          const resp = await authFetch(`${SERVER_URL}/faction/claim`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ baseHashtag: base, minorTag: tag })
+}).then(r => r.json());
           if (resp.success) {
             currentPlayer.hashtag = resp.minorTag;
             currentPlayer.likes = resp.player.likes;
@@ -600,11 +600,11 @@
         const amount = parseInt(document.getElementById('donateAmount')?.value);
         if (!target || !amount || amount < 1) return;
         try {
-          const resp = await fetch(`${SERVER_URL}/faction/donate`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: currentPlayer.id, targetUserId: target, amount })
-          }).then(r => r.json());
+          const resp = await authFetch(`${SERVER_URL}/faction/donate`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ targetUserId: target, amount })
+}).then(r => r.json());
           if (resp.success) {
             factionBtn.click();
             fetchState();
@@ -627,11 +627,11 @@
         factionChatSending = true;
         try {
           const baseHashtag = factionContent.dataset.base;
-          await fetch(`${SERVER_URL}/faction/chat/send`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: currentPlayer.id, baseHashtag, text })
-          });
+          await authFetch(`${SERVER_URL}/faction/chat/send`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ baseHashtag, text })
+});
           input.value = '';
           lastFactionChatSendTime = now;
           const container = document.getElementById('factionChatMessages');
@@ -664,11 +664,11 @@
 
     // --- Кнопка фракции (исправленный обработчик) ---
     factionBtn.addEventListener('click', async () => {
-      const res = await fetch(`${SERVER_URL}/faction/info`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentPlayer.id })
-      }).then(r => r.json());
+      const res = await authFetch(`${SERVER_URL}/faction/info`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({})
+}).then(r => r.json());
       if (!res.faction) {
         factionTitle.textContent = 'Вы не состоите во фракции';
         factionContent.innerHTML = '';
@@ -725,11 +725,11 @@
 
       document.getElementById('closeFactionBtn').addEventListener('click', () => {
         if (!isCommander && !hasMinor) {
-          fetch(`${SERVER_URL}/faction/leave`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: currentPlayer.id })
-          });
+          authFetch(`${SERVER_URL}/faction/leave`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({})
+});
           currentPlayer.faction = null;
           factionPanel.style.display = 'none';
           const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
@@ -753,11 +753,11 @@
         const releaseBtnHtml = '<button id="releaseMinorBtn">Освободить хештег</button>';
         factionContent.insertAdjacentHTML('beforeend', releaseBtnHtml);
         document.getElementById('releaseMinorBtn').addEventListener('click', async () => {
-          const resp = await fetch(`${SERVER_URL}/faction/release`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: currentPlayer.id })
-          }).then(r => r.json());
+          const resp = await authFetch(`${SERVER_URL}/faction/release`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({})
+}).then(r => r.json());
           if (resp.success) {
             currentPlayer.faction = null;
             currentPlayer.hashtag = null;
@@ -1169,13 +1169,13 @@
     document.getElementById('closeMenuBtn').addEventListener('click', () => { menuPanel.style.display = 'none'; });
 
     releaseBtn.addEventListener('click', async () => {
-      if (!currentPlayer.hashtag) return;
-      try {
-        const res = await fetch(`${SERVER_URL}/release`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: currentPlayer.id })
-        }).then(r => r.json());
+  if (!currentPlayer.hashtag) return;
+  try {
+    const res = await authFetch(`${SERVER_URL}/release`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    }).then(r => r.json());
         if (res.success) {
           currentPlayer.faction = null;
           currentPlayer.hashtag = null;
@@ -1291,11 +1291,11 @@
     }
 
 function claimHashtag(hashtag) {
-  fetch(`${SERVER_URL}/claim`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId: currentPlayer.id, hashtag })
-  })
+  authFetch(`${SERVER_URL}/claim`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ hashtag })
+})
   .then(r => r.json())
   .then(res => {
     if (res.success) {
@@ -1320,11 +1320,11 @@ function claimHashtag(hashtag) {
     function attackCell(x, y, amount) {
       if (attackInProgress) return;
       attackInProgress = true;
-      fetch(`${SERVER_URL}/attack`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentPlayer.id, x, y, amount })
-      })
+      authFetch(`${SERVER_URL}/attack`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ x, y, amount })
+})
       .then(r => r.json())
      .then(res => {
         attackInProgress = false;
@@ -1344,11 +1344,11 @@ function claimHashtag(hashtag) {
 
     function fetchState() {
       if (!currentPlayer.id) return;
-      fetch(`${SERVER_URL}/sync`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentPlayer.id, clientVersion: currentMapVersion })
-      })
+      authFetch(`${SERVER_URL}/sync`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ clientVersion: currentMapVersion })
+})
       .then(r => r.json())
       .then(data => {
         applyServerResponse(data);
@@ -1358,7 +1358,11 @@ function claimHashtag(hashtag) {
     }
 
     function spectate() {
-      fetch(`${SERVER_URL}/spectate`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:currentPlayer.id}) })
+      authFetch(`${SERVER_URL}/spectate`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({})
+})
       .then(() => {
         currentPlayer.hashtag = null;
         currentPlayer.faction = null;
@@ -1421,11 +1425,11 @@ function claimHashtag(hashtag) {
               joinBtn.onclick = (e) => {
                 e.stopPropagation();
                 if (!currentPlayer.nickname) { updateInfo('Сначала задайте ник'); return; }
-                fetch(`${SERVER_URL}/faction/join`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ userId: currentPlayer.id, baseHashtag: tag })
-                }).then(r => r.json()).then(resp => {
+                authFetch(`${SERVER_URL}/faction/join`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ baseHashtag: tag })
+}).then(r => r.json()).then(resp => {
                   if (resp.success) {
                     hideSelection();
                     factionBtn.click();
@@ -1459,11 +1463,11 @@ function claimHashtag(hashtag) {
       buildList(hashtagLikes);
  selectionRefreshInterval = setInterval(async () => {
   try {
-    const res = await fetch(`${SERVER_URL}/state`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: currentPlayer.id })
-    }).then(r => r.json());
+    const res = await authFetch(`${SERVER_URL}/state`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({})
+}).then(r => r.json());
     
     if (res.hashtagLikes) {
       hashtagLikes = res.hashtagLikes;
@@ -1743,11 +1747,11 @@ if (!animating && labelCache) {
     function startGame() {
       showLoadingScreen();
       resizeCanvas();
-      fetch(`${SERVER_URL}/map`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentPlayer.id })
-      })
+      authFetch(`${SERVER_URL}/map`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({})
+})
       .then(r => r.json())
       .then(data => {
         if (data.map) map = data.map;
@@ -1875,86 +1879,165 @@ if (!animating && labelCache) {
     showLoadingScreen();
     updateOnlineCount();                                         // ← первый вызов сразу
     if (!onlineUpdateInterval) onlineUpdateInterval = setInterval(updateOnlineCount, 60000);
-    vkBridge.send('VKWebAppInit')
-      .then(() => vkBridge.send('VKWebAppGetUserInfo'))
-      .then(data => {
-        currentPlayer.id = data.id;
-        updateInfo(`Привет, ${data.first_name}! Соединяюсь с сервером...`);
-        return fetch(`${SERVER_URL}/join`, {
+   vkBridge.send('VKWebAppInit')
+  .then(() => vkBridge.send('VKWebAppGetUserInfo'))
+  .then(async (data) => {
+    // 1. Получаем параметры аутентификации из URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const sign = urlParams.get('sign');
+    const vk_user_id = urlParams.get('vk_user_id');
+    const vk_app_id = urlParams.get('vk_app_id');
+    const vk_chat_id = urlParams.get('vk_chat_id');
+    if (!sign || !vk_user_id) {
+      throw new Error('Missing VK auth parameters');
+    }
+
+    // 2. Запрашиваем JWT токен
+    const authRes = await fetch(`${SERVER_URL}/auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sign, vk_user_id, vk_app_id, vk_chat_id })
+    });
+    const authData = await authRes.json();
+    if (!authRes.ok) throw new Error(authData.error);
+
+    const token = authData.token;
+    localStorage.setItem('vk_token', token);
+    window.authFetch = async (url, options = {}) => {
+  let token = localStorage.getItem('vk_token');
+  const makeRequest = async (t) => {
+    return fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        'Authorization': `Bearer ${t}`
+      }
+    });
+  };
+  let res = await makeRequest(token);
+  if (res.status === 401) {
+    // Токен истёк – обновляем через /auth
+    const urlParams = new URLSearchParams(window.location.search);
+    const sign = urlParams.get('sign');
+    const vk_user_id = urlParams.get('vk_user_id');
+    const vk_app_id = urlParams.get('vk_app_id');
+    const vk_chat_id = urlParams.get('vk_chat_id');
+    const authRes = await fetch(`${SERVER_URL}/auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sign, vk_user_id, vk_app_id, vk_chat_id })
+    });
+    const authData = await authRes.json();
+    if (!authRes.ok) throw new Error(authData.error);
+    const newToken = authData.token;
+    localStorage.setItem('vk_token', newToken);
+    res = await makeRequest(newToken);
+  }
+  return res;
+};
+    currentPlayer.id = authData.userId;
+
+    // 3. Обёртка для авторизованных запросов
+    window.authFetch = async (url, options = {}) => {
+      const storedToken = localStorage.getItem('vk_token');
+      const headers = {
+        ...options.headers,
+        'Authorization': `Bearer ${storedToken}`
+      };
+      let response = await fetch(url, { ...options, headers });
+      if (response.status === 401) {
+        // Токен истёк – обновляем
+        const refreshRes = await fetch(`${SERVER_URL}/auth`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: data.id })
+          body: JSON.stringify({ sign, vk_user_id, vk_app_id, vk_chat_id })
         });
-      })
-      .then(r => {
-        if (!r.ok) throw new Error(`Ошибка сервера: ${r.status}`);
-        return r.json();
-      })
-      .then(state => {
-        if (state.gameOver) {
-          hideLoadingScreen();
-          showGameEndScreen(state.leaderboard || []);
-          return;
-        }
-        if (state.blocked) {
-          hideLoadingScreen();
-          updateInfo('⛔ Вы заблокированы в этой игре');
-          return;
-        }
-        if (state.player) {
-          currentPlayer.likes = state.player.likes;
-          currentPlayer.hashtag = state.player.hashtag || null;
-          if (state.player.nickname) {
-            currentPlayer.nickname = state.player.nickname;
-            document.getElementById('nicknameInput').style.display = 'none';
-            document.getElementById('setNicknameBtn').style.display = 'none';
-            document.getElementById('nicknameDisplay').textContent = 'Ник: ' + state.player.nickname;
-            document.getElementById('nicknameDisplay').style.display = 'inline';
-          }
-          if (state.player.spawnX !== undefined) {
-            currentPlayer.spawnX = state.player.spawnX;
-            currentPlayer.spawnY = state.player.spawnY;
-          }
-          if (state.player.blockedUntil !== undefined) {
-            currentPlayer.blockedUntil = state.player.blockedUntil;
-          }
-        }
-        if (state.playersInfo) playersInfo = state.playersInfo;
-        if (state.leaderboard) leaderboard = state.leaderboard;
-        if (state.hashtagLikes) hashtagLikes = state.hashtagLikes;
-        if (state.worldW) MAP_W = state.worldW;
-        if (state.worldH) MAP_H = state.worldH;
-        if (state.gameEndTime) {
-          gameEndTime = state.gameEndTime;
-          gameOver = state.gameOver || false;
-          updateTimer();
-          if (!timerInterval) timerInterval = setInterval(updateTimer, 1000);
-        }
-        if (state.mapVersion !== undefined) currentMapVersion = state.mapVersion;
-        currentPlayer.color = state.player?.color || '#cccccc';
-        currentPlayer.faction = state.faction;
+        const newAuth = await refreshRes.json();
+        if (!refreshRes.ok) throw new Error(newAuth.error);
+        const newToken = newAuth.token;
+        localStorage.setItem('vk_token', newToken);
+        // Повторяем исходный запрос с новым токеном
+        headers.Authorization = `Bearer ${newToken}`;
+        response = await fetch(url, { ...options, headers });
+      }
+      return response;
+    };
 
-        if (currentPlayer.hashtag) {
-          startGame();
-        } else {
-          if (currentPlayer.faction) {
-            hideSelection();
-            factionBtn.click();
-          } else {
-            const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
-            showSelection(AVAILABLE_HASHTAGS, taken);
-            updateInfo('Выберите хештег и ник');
-          }
-        }
-        lastReadTimestamp = Date.now(); 
-        hideLoadingScreen();
-      })
-      .catch(err => {
-        updateInfo('⚠️ Нет связи с сервером: ' + err.message);
-        console.error(err);
-        resizeCanvas();
-        needsRedraw = true;
-      });
+    updateInfo(`Привет, ${data.first_name}! Соединяюсь с сервером...`);
+
+    // 4. Авторизованный запрос /join (без userId в теле)
+    const joinRes = await window.authFetch(`${SERVER_URL}/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}) // userId не передаём
+    });
+    if (!joinRes.ok) throw new Error(`Ошибка сервера: ${joinRes.status}`);
+    const state = await joinRes.json();
+
+    if (state.gameOver) {
+      hideLoadingScreen();
+      showGameEndScreen(state.leaderboard || []);
+      return;
+    }
+    if (state.blocked) {
+      hideLoadingScreen();
+      updateInfo('⛔ Вы заблокированы в этой игре');
+      return;
+    }
+    if (state.player) {
+      currentPlayer.likes = state.player.likes;
+      currentPlayer.hashtag = state.player.hashtag || null;
+      if (state.player.nickname) {
+        currentPlayer.nickname = state.player.nickname;
+        document.getElementById('nicknameInput').style.display = 'none';
+        document.getElementById('setNicknameBtn').style.display = 'none';
+        document.getElementById('nicknameDisplay').textContent = 'Ник: ' + state.player.nickname;
+        document.getElementById('nicknameDisplay').style.display = 'inline';
+      }
+      if (state.player.spawnX !== undefined) {
+        currentPlayer.spawnX = state.player.spawnX;
+        currentPlayer.spawnY = state.player.spawnY;
+      }
+      if (state.player.blockedUntil !== undefined) {
+        currentPlayer.blockedUntil = state.player.blockedUntil;
+      }
+    }
+    if (state.playersInfo) playersInfo = state.playersInfo;
+    if (state.leaderboard) leaderboard = state.leaderboard;
+    if (state.hashtagLikes) hashtagLikes = state.hashtagLikes;
+    if (state.worldW) MAP_W = state.worldW;
+    if (state.worldH) MAP_H = state.worldH;
+    if (state.gameEndTime) {
+      gameEndTime = state.gameEndTime;
+      gameOver = state.gameOver || false;
+      updateTimer();
+      if (!timerInterval) timerInterval = setInterval(updateTimer, 1000);
+    }
+    if (state.mapVersion !== undefined) currentMapVersion = state.mapVersion;
+    currentPlayer.color = state.player?.color || '#cccccc';
+    currentPlayer.faction = state.faction;
+
+    if (currentPlayer.hashtag) {
+      startGame();
+    } else {
+      if (currentPlayer.faction) {
+        hideSelection();
+        factionBtn.click();
+      } else {
+        const taken = Object.values(playersInfo).map(p => p.hashtag).filter(Boolean);
+        showSelection(AVAILABLE_HASHTAGS, taken);
+        updateInfo('Выберите хештег и ник');
+      }
+    }
+    lastReadTimestamp = Date.now();
+    hideLoadingScreen();
+  })
+  .catch(err => {
+    updateInfo('⚠️ Нет связи с сервером: ' + err.message);
+    console.error(err);
+    resizeCanvas();
+    needsRedraw = true;
+  });
   </script>
 </body>
 </html>
