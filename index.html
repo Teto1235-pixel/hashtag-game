@@ -1937,13 +1937,13 @@ const authRes = await fetch(`${SERVER_URL}/auth`, {
     updateInfo(`Привет, ${data.first_name}! Соединяюсь с сервером...`);
 
     // 4. Авторизованный запрос /join (без userId в теле)
-    const joinRes = await window.authFetch(`${SERVER_URL}/join`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}) // userId не передаём
-    });
-    console.log('Sending request to', url, 'with token:', storedToken);
-    if (!joinRes.ok) throw new Error(`Ошибка сервера: ${joinRes.status}`);
+const joinRes = await window.authFetch(`${SERVER_URL}/join`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({})
+});
+console.log('Join response status:', joinRes.status);
+if (!joinRes.ok) throw new Error(`Ошибка сервера: ${joinRes.status}`);
     const state = await joinRes.json();
 
     if (state.gameOver) {
