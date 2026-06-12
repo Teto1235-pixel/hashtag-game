@@ -1882,86 +1882,57 @@ if (!animating && labelCache) {
    vkBridge.send('VKWebAppInit')
   .then(() => vkBridge.send('VKWebAppGetUserInfo'))
   .then(async (data) => {
-    // 1. Получаем параметры аутентификации из URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const sign = urlParams.get('sign');
-    const vk_user_id = urlParams.get('vk_user_id');
-    const vk_app_id = urlParams.get('vk_app_id');
-    const vk_chat_id = urlParams.get('vk_chat_id');
-    if (!sign || !vk_user_id) {
-      throw new Error('Missing VK auth parameters');
-    }
+   // 1. Получаем ВСЕ параметры аутентификации из URL (кроме hash)
+const urlParams = new URLSearchParams(window.location.search);
+const allParams = {};
+for (const [key, value] of urlParams.entries()) {
+  allParams[key] = value;
+}
+const sign = allParams.sign;
+const vk_user_id = allParams.vk_user_id;
+if (!sign || !vk_user_id) {
+  throw new Error('Missing VK auth parameters');
+}
+const authParams = allParams;  // сохраняем все параметры для обновления токена
 
-    // 2. Запрашиваем JWT токен
-    const authRes = await fetch(`${SERVER_URL}/auth`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sign, vk_user_id, vk_app_id, vk_chat_id })
-    });
+// 2. Запрашиваем JWT токен, отправляя все параметры
+const authRes = await fetch(`${SERVER_URL}/auth`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(allParams)
+});
     const authData = await authRes.json();
     if (!authRes.ok) throw new Error(authData.error);
 
     const token = authData.token;
     localStorage.setItem('vk_token', token);
-    window.authFetch = async (url, options = {}) => {
-  let token = localStorage.getItem('vk_token');
-  const makeRequest = async (t) => {
-    return fetch(url, {
-      ...options,
-      headers: {
-        ...options.headers,
-        'Authorization': `Bearer ${t}`
-      }
-    });
-  };
-  let res = await makeRequest(token);
-  if (res.status === 401) {
-    // Токен истёк – обновляем через /auth
-    const urlParams = new URLSearchParams(window.location.search);
-    const sign = urlParams.get('sign');
-    const vk_user_id = urlParams.get('vk_user_id');
-    const vk_app_id = urlParams.get('vk_app_id');
-    const vk_chat_id = urlParams.get('vk_chat_id');
-    const authRes = await fetch(`${SERVER_URL}/auth`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sign, vk_user_id, vk_app_id, vk_chat_id })
-    });
-    const authData = await authRes.json();
-    if (!authRes.ok) throw new Error(authData.error);
-    const newToken = authData.token;
-    localStorage.setItem('vk_token', newToken);
-    res = await makeRequest(newToken);
-  }
-  return res;
-};
     currentPlayer.id = authData.userId;
 
     // 3. Обёртка для авторизованных запросов
-    window.authFetch = async (url, options = {}) => {
-      const storedToken = localStorage.getItem('vk_token');
-      const headers = {
-        ...options.headers,
-        'Authorization': `Bearer ${storedToken}`
-      };
-      let response = await fetch(url, { ...options, headers });
-      if (response.status === 401) {
-        // Токен истёк – обновляем
-        const refreshRes = await fetch(`${SERVER_URL}/auth`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sign, vk_user_id, vk_app_id, vk_chat_id })
-        });
-        const newAuth = await refreshRes.json();
-        if (!refreshRes.ok) throw new Error(newAuth.error);
-        const newToken = newAuth.token;
-        localStorage.setItem('vk_token', newToken);
-        // Повторяем исходный запрос с новым токеном
-        headers.Authorization = `Bearer ${newToken}`;
-        response = await fetch(url, { ...options, headers });
-      }
-      return response;
-    };
+  window.authFetch = async (url, options = {}) => {
+  const storedToken = localStorage.getItem('vk_token');
+  const headers = {
+    ...options.headers,
+    'Authorization': `Bearer ${storedToken}`
+  };
+  let response = await fetch(url, { ...options, headers });
+  if (response.status === 401) {
+    // Токен истёк – обновляем, используя сохранённые authParams
+    const refreshRes = await fetch(`${SERVER_URL}/auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(authParams) // отправляем все параметры
+    });
+    const newAuth = await refreshRes.json();
+    if (!refreshRes.ok) throw new Error(newAuth.error);
+    const newToken = newAuth.token;
+    localStorage.setItem('vk_token', newToken);
+    // Повторяем исходный запрос с новым токеном
+    headers.Authorization = `Bearer ${newToken}`;
+    response = await fetch(url, { ...options, headers });
+  }
+  return response;
+};
 
     updateInfo(`Привет, ${data.first_name}! Соединяюсь с сервером...`);
 
