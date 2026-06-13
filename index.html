@@ -59,6 +59,9 @@
       max-width: 95vw;
       overflow-x: auto;
       white-space: nowrap;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      background: #fff;
     }
     .faction-layout {
       flex-wrap: nowrap;
@@ -115,6 +118,65 @@
         height: 120px;
       }
     }
+
+    /* Стиль для списка хештегов в окне выбора */
+#hashtagList {
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background: #f9f9f9;
+  padding: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+
+/* Общие стили для блоков со списками во фракционной панели */
+.faction-list-box {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+  padding: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 5px;
+  margin-bottom: 10px;
+}
+
+/* Заголовки списков во фракционной панели */
+.faction-list-title {
+  font-weight: bold;
+  margin-top: 10px;
+  margin-bottom: 4px;
+}
+
+/* Элементы списка (кнопки) во фракционной панели */
+.faction-list-box button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin: 4px 0;
+  padding: 6px 8px;
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.faction-list-box button:hover {
+  background: #e0e0e0;
+}
+
+/* Для занятых малых хештегов (не кнопки, а текст) */
+.faction-list-box .occupied-minor {
+  display: block;
+  padding: 6px 8px;
+  margin: 4px 0;
+  background: #eef;
+  border-left: 3px solid #4d79ff;
+  border-radius: 4px;
+  font-size: 14px;
+}
   </style>
 </head>
 <body>
@@ -681,32 +743,48 @@
       const hasMinor = !!myMinor;
       const isCommander = currentPlayer.hashtag && AVAILABLE_HASHTAGS.includes(currentPlayer.hashtag) && currentPlayer.hashtag === res.baseHashtag;
 
-      let leftHtml = '';
-      if (f.commander) leftHtml += `<p>Командир: ${f.commander.nickname}</p>`;
-      leftHtml += '<h4>Подчинённые:</h4>';
-      f.minors.filter(m => m.occupiedBy).forEach(m => {
-        leftHtml += `<p>${m.nickname} (${m.tag}) – ${m.likes} лайков</p>`;
-      });
-      leftHtml += '<h4>Свободные малые хештеги:</h4>';
-      f.minors.filter(m => !m.occupiedBy).forEach(m => {
-        leftHtml += `<p>#${m.tag} – ${m.likes} лайков <button data-action="claim" data-tag="${m.tag}" data-base="${res.baseHashtag}">Занять</button></p>`;
-      });
+let leftHtml = '';
+if (f.commander) leftHtml += `<p>Командир: ${f.commander.nickname}</p>`;
 
-      let rightHtml = '<h4>Передать лайки</h4>';
-      rightHtml += '<p><select id="donateTarget">';
-      if (f.commander && f.commander.userId !== currentPlayer.id) {
-        rightHtml += `<option value="${f.commander.userId}">Командир ${f.commander.nickname}</option>`;
-      }
-      f.minors.filter(m => m.occupiedBy && m.occupiedBy !== currentPlayer.id).forEach(m => {
-        rightHtml += `<option value="${m.occupiedBy}">${m.nickname} (${m.tag})</option>`;
-      });
-      rightHtml += '</select>';
-      rightHtml += '<input type="number" id="donateAmount" min="1" placeholder="Сколько">';
-      rightHtml += '<button data-action="donate">Передать</button></p>';
-      rightHtml += '<h4>Чат фракции</h4>';
-      rightHtml += `<div id="factionChatMessages"></div>`;
-      rightHtml += `<input type="text" id="factionChatInput" placeholder="Сообщение..." style="width:80%; padding:4px; margin-top:4px;">`;
-      rightHtml += `<button id="factionChatSendBtn" style="padding:4px 10px;">Отправить</button>`;
+leftHtml += '<div class="faction-list-title">📋 Подчинённые:</div>';
+leftHtml += '<div class="faction-list-box">';
+const occupied = f.minors.filter(m => m.occupiedBy);
+if (occupied.length === 0) {
+  leftHtml += '<div style="color:#888; padding:8px;">Нет подчинённых</div>';
+} else {
+  occupied.forEach(m => {
+    leftHtml += `<div class="occupied-minor">${m.nickname} (${m.tag}) – ${m.likes} лайков</div>`;
+  });
+}
+leftHtml += '</div>';
+
+leftHtml += '<div class="faction-list-title">🎲 Свободные малые хештеги:</div>';
+leftHtml += '<div class="faction-list-box">';
+const free = f.minors.filter(m => !m.occupiedBy);
+if (free.length === 0) {
+  leftHtml += '<div style="color:#888; padding:8px;">Нет свободных</div>';
+} else {
+  free.forEach(m => {
+    leftHtml += `<button data-action="claim" data-tag="${m.tag}" data-base="${res.baseHashtag}">#${m.tag} – ${m.likes} лайков</button>`;
+  });
+}
+leftHtml += '</div>';
+
+let rightHtml = '<h4>Передать лайки</h4>';
+rightHtml += '<p><select id="donateTarget">';
+if (f.commander && f.commander.userId !== currentPlayer.id) {
+  rightHtml += `<option value="${f.commander.userId}">Командир ${f.commander.nickname}</option>`;
+}
+f.minors.filter(m => m.occupiedBy && m.occupiedBy !== currentPlayer.id).forEach(m => {
+  rightHtml += `<option value="${m.occupiedBy}">${m.nickname} (${m.tag})</option>`;
+});
+rightHtml += '</select>';
+rightHtml += '<input type="number" id="donateAmount" min="1" placeholder="Сколько">';
+rightHtml += '<button data-action="donate">Передать</button></p>';
+rightHtml += '<h4>Чат фракции</h4>';
+rightHtml += `<div id="factionChatMessages"></div>`;
+rightHtml += `<input type="text" id="factionChatInput" placeholder="Сообщение..." style="width:80%; padding:4px; margin-top:4px;">`;
+rightHtml += `<button id="factionChatSendBtn" style="padding:4px 10px;">Отправить</button>`;
 
       const html = `<div class="faction-layout"><div class="faction-left">${leftHtml}</div><div class="faction-right">${rightHtml}</div></div>`;
       factionContent.dataset.base = res.baseHashtag;
