@@ -648,15 +648,6 @@
       }
     });
 
-// Отправка сообщения во фракционном чате по Enter
-factionContent.addEventListener('keypress', (e) => {
-  if (e.target.id === 'factionChatInput' && e.key === 'Enter') {
-    e.preventDefault();
-    const sendBtn = document.getElementById('factionChatSendBtn');
-    if (sendBtn) sendBtn.click();
-  }
-});
-
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         if (window.chatInterval) {
@@ -721,6 +712,17 @@ factionContent.addEventListener('keypress', (e) => {
       factionContent.dataset.base = res.baseHashtag;
       factionContent.innerHTML = html;
       factionPanel.style.display = 'block';
+
+      const factionChatInput = document.getElementById('factionChatInput');
+if (factionChatInput) {
+  factionChatInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const sendBtn = document.getElementById('factionChatSendBtn');
+      if (sendBtn) sendBtn.click();
+    }
+  });
+}
 
       let closeBtnHtml;
       if (isCommander) {
