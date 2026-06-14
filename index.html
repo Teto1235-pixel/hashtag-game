@@ -84,7 +84,12 @@
       width: auto !important;
       padding: 4px 16px;
     }
-
+    
+    #menuInfoBtn {
+  background: #4d79ff;
+  color: white;
+  border: none;
+}
     /* Книга инструкции */
     #infoOverlay {
       display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
@@ -216,6 +221,7 @@
   <div id="menuPanel">
   <p id="menuStatus"></p>
   <button id="releaseBtn">Освободить хештег</button>
+  <button id="menuInfoBtn">❕ Инструкция</button> 
   <button id="chooseHashtagBtn" style="display:none;">Выбрать хештег</button>
   <button id="closeMenuBtn">Закрыть</button>
 </div>
@@ -1256,6 +1262,10 @@ if (factionChatInput) {
       menuPanel.style.display = 'block';
     });
     document.getElementById('closeMenuBtn').addEventListener('click', () => { menuPanel.style.display = 'none'; });
+    document.getElementById('menuInfoBtn').addEventListener('click', () => {
+  document.getElementById('infoOverlay').style.display = 'block';
+  document.getElementById('infoBook').style.display = 'block';
+});
 
     releaseBtn.addEventListener('click', async () => {
   if (!currentPlayer.hashtag) return;
