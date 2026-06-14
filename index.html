@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <title>Hashtag Territory</title>
+  <title>Re:Wi</title>
   <style>
     body {
       margin: 0; padding: 0; background: #222;
@@ -201,7 +201,7 @@
   <div id="chatPanel" style="display:none; position:absolute; bottom:80px; left:20px; width:320px; max-height:400px; background:rgba(0,0,0,0.75); color:white; border-radius:8px; padding:8px; z-index:15; font-family:'Courier New',monospace;">
     <div id="chatMessages" style="height:250px; overflow-y:auto; font-size:24px; margin-bottom:5px;"></div>
     <input type="text" id="chatInput" placeholder="Сообщение..." style="width:100%; box-sizing:border-box; padding:4px; font-size:24px; background:#333; color:white; border:1px solid #555; border-radius:4px;">
-    <button id="chatSendBtn" style="width:100%; margin-top:4px; background:#4d79ff; color:white; border:none; border-radius:4px; padding:6px; cursor:pointer; font-size:24px;">Отправить</button>
+    <button id="chatSendBtn" style="width:100%; margin-top:4px; background:#4d79ff; color:white; border:none; border-radius:4px; padding:6px; cursor:pointer; font-size:24px;">Send</button>
   </div>
   <button id="chatToggleBtn" style="position:absolute; bottom:80px; left:20px; z-index:15; background:rgba(255,255,255,0.9); border:1px solid #ccc; padding:4px 10px; border-radius:4px; cursor:pointer; font-family:'Courier New',monospace;">
   💬
@@ -221,14 +221,13 @@
   <div id="menuPanel">
   <p id="menuStatus"></p>
   <button id="releaseBtn">Освободить хештег</button>
-  <button id="menuInfoBtn">❕ Инструкция</button> 
+  <button id="menuInfoBtn">❕ ИНФОРМАЦИЯ</button> 
   <button id="chooseHashtagBtn" style="display:none;">Выбрать хештег</button>
   <button id="closeMenuBtn">Закрыть</button>
 </div>
  <div id="overlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3); z-index:19;"></div> 
   <div id="selection">
     <h3>Выберите хештег</h3>
-    <!-- Ник и кнопка информации перенесены наверх -->
     <div id="nicknameBlock" style="margin-bottom:10px;">
       <label style="font-size:14px;">Ваш ник: 
         <input type="text" id="nicknameInput" placeholder="Введите ник" maxlength="16" style="width:120px;">
@@ -242,11 +241,11 @@
     <div id="hashtagList"></div>
     <p style="font-size:12px; margin:10px 0; color:#555; line-height:1.4;">
       1. Выбери хештег — заспаунишься.<br>
-      2. Ресурс — лайки.<br>
+      2. Ресурс — лайки по хэштегу.<br>
       3. Кликай по клеткам рядом.
     </p>
     <hr>
-    <button id="spectateBtn">👀 Наблюдать</button>
+    <button id="spectateBtn">Наблюдать</button>
   </div>
 
   <div id="attackPanel">
@@ -263,7 +262,7 @@
   </div>
 
   <div id="gameover">
-    <div>💔 Вы потеряли все клетки!</div>
+    <div>💔 Соболезную</div>
     <button id="gameoverSpectate">Наблюдать</button>
   </div>
   <div id="gameEndScreen">
@@ -289,7 +288,7 @@
   <div id="infoOverlay"></div>
   <div id="infoBook">
     <button class="close-btn" id="closeInfoBook">✖</button>
-    <h2>Инструкция</h2>
+    <h2>Информация</h2>
     <div class="toc" id="toc"></div>
     <div id="infoContent"></div>
   </div>
