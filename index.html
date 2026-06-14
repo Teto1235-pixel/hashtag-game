@@ -1642,9 +1642,6 @@ if (!animating && labelCache) {
     const rectW = (b.maxX - b.minX + 1) * CELL_SIZE;
     const rectH = (b.maxY - b.minY + 1) * CELL_SIZE;
 
-    // Пропускаем очень маленькие территории (менее 3 клеток)
-    if (rectW < CELL_SIZE * 2.5 || rectH < CELL_SIZE * 2.5) continue;
-
     // Основной текст: "#хештег"
     const mainText = `#${b.hashtag}`;
     // Дополнительный текст: количество клеток
@@ -1684,9 +1681,6 @@ if (!animating && labelCache) {
     const centerY = (b.minY + b.maxY) / 2 * CELL_SIZE + CELL_SIZE / 2;
     const rectW = (b.maxX - b.minX + 1) * CELL_SIZE;
     const rectH = (b.maxY - b.minY + 1) * CELL_SIZE;
-
-    // Пропускаем слишком маленькие территории (менее 2 клеток)
-    if (rectW < CELL_SIZE * 2 || rectH < CELL_SIZE * 2) continue;
 
     const text = `#${b.hashtag}`;
     let fontSize = Math.min(32, Math.max(8, Math.sqrt(b.count) * 2.5));
