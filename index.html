@@ -2038,11 +2038,45 @@ console.log('Join response status:', joinRes.status);
 if (!joinRes.ok) throw new Error(`Ошибка сервера: ${joinRes.status}`);
     const state = await joinRes.json();
 
+ async function fetchMap() {
+  const res = await authFetch(`${SERVER_URL}/map`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({})
+  });
+  const data = await res.json();
+  if (data.map) {
+    map = data.map;
+    MAP_W = data.worldW;
+    MAP_H = data.worldH;
+    if (data.mapVersion !== undefined) currentMapVersion = data.mapVersion;
+    rebuildOffscreen();
+    rebuildTerritoryCache();
+    updateAdjacentSet();
+    needsRedraw = true;
+  }
+}   
+
     if (state.gameOver) {
-      hideLoadingScreen();
-      showGameEndScreen(state.leaderboard || []);
-      return;
-    }
+  // Загружаем финальную карту (если её нет в state, то запрашиваем отдельно)
+  if (state.map) {
+    map = state.map;
+    MAP_W = state.worldW;
+    MAP_H = state.worldH;
+    if (state.mapVersion !== undefined) currentMapVersion = state.mapVersion;
+    rebuildOffscreen();
+    rebuildTerritoryCache();
+    updateAdjacentSet();
+    needsRedraw = true;
+  } else {
+    // Если карта не пришла в ответе, запрашиваем через /map
+    await fetchMap();
+  }
+  updateLeaderboard(); // обновить таблицу из state.leaderboard
+  hideLoadingScreen();
+  showGameEndScreen(state.leaderboard || []);
+  return;
+}
     if (state.blocked) {
       hideLoadingScreen();
       updateInfo('⛔ Вы заблокированы в этой игре');
