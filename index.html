@@ -1804,23 +1804,78 @@ function saveFullMap(filename = 'hashtag_territory.png') {
   fullCtx.fillStyle = '#ffffff';
   fullCtx.fillRect(0, 0, fullCanvas.width, fullCanvas.height);
 
-  // Рисуем все клетки
+  // Отрисовка клеток (как в drawMap без zoom)
   for (let y = 0; y < MAP_H; y++) {
     for (let x = 0; x < MAP_W; x++) {
       const cell = map[y][x];
       if (cell.ownerId) {
         const info = playersInfo[cell.ownerId];
         fullCtx.fillStyle = info ? info.color : '#cccccc';
+        fullCtx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
       } else if (cell.hashtag) {
         fullCtx.fillStyle = '#b0b0b0';
-      } else {
-        continue; // оставляем белый фон
+        fullCtx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
       }
-      fullCtx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
     }
   }
 
-  // (Опционально) можно добавить подписи, но для простоты оставляем только цветные клетки
+  // Добавляем подписи (копируем логику из drawMap)
+  fullCtx.save();
+  fullCtx.textAlign = 'center';
+  fullCtx.textBaseline = 'middle';
+
+  // Командиры
+  for (const b of labelCache.commanders) {
+    const centerX = (b.minX + b.maxX) / 2 * CELL_SIZE + CELL_SIZE / 2;
+    const centerY = (b.minY + b.maxY) / 2 * CELL_SIZE + CELL_SIZE / 2;
+    const rectW = (b.maxX - b.minX + 1) * CELL_SIZE;
+    const rectH = (b.maxY - b.minY + 1) * CELL_SIZE;
+
+    const mainText = `#${b.hashtag}`;
+    const subText = `${b.count}`;
+
+    let fontSize = Math.min(48, Math.max(8, Math.sqrt(b.count) * 3));
+    fullCtx.font = `bold ${fontSize}px "Courier New", monospace`;
+    let mainWidth = fullCtx.measureText(mainText).width;
+    let subWidth = fullCtx.measureText(subText).width;
+    let maxTextWidth = Math.max(mainWidth, subWidth);
+
+    while (fontSize > 8 && (maxTextWidth > rectW * 0.9 || fontSize * 1.8 > rectH)) {
+      fontSize -= 1;
+      fullCtx.font = `bold ${fontSize}px "Courier New", monospace`;
+      mainWidth = fullCtx.measureText(mainText).width;
+      subWidth = fullCtx.measureText(subText).width;
+      maxTextWidth = Math.max(mainWidth, subWidth);
+    }
+
+    fullCtx.fillStyle = 'rgba(0,0,0,0.7)';
+    fullCtx.fillText(mainText, centerX, centerY - fontSize * 0.2);
+    fullCtx.font = `${Math.max(8, fontSize * 0.7)}px "Courier New", monospace`;
+    fullCtx.fillStyle = 'rgba(0,0,0,0.9)';
+    fullCtx.fillText(subText, centerX, centerY + fontSize * 0.5);
+  }
+
+  // Подчинённые (малые хештеги)
+  for (const b of labelCache.minors) {
+    const centerX = (b.minX + b.maxX) / 2 * CELL_SIZE + CELL_SIZE / 2;
+    const centerY = (b.minY + b.maxY) / 2 * CELL_SIZE + CELL_SIZE / 2;
+    const rectW = (b.maxX - b.minX + 1) * CELL_SIZE;
+    const rectH = (b.maxY - b.minY + 1) * CELL_SIZE;
+
+    const text = `#${b.hashtag}`;
+    let fontSize = Math.min(32, Math.max(8, Math.sqrt(b.count) * 2.5));
+    fullCtx.font = `bold ${fontSize}px "Courier New", monospace`;
+    let textWidth = fullCtx.measureText(text).width;
+    while (fontSize > 8 && (textWidth > rectW * 0.9 || fontSize * 1.4 > rectH)) {
+      fontSize -= 1;
+      fullCtx.font = `bold ${fontSize}px "Courier New", monospace`;
+      textWidth = fullCtx.measureText(text).width;
+    }
+    fullCtx.fillStyle = 'rgba(0,0,0,0.6)';
+    fullCtx.fillText(text, centerX, centerY);
+  }
+
+  fullCtx.restore();
 
   // Сохраняем как PNG
   const dataUrl = fullCanvas.toDataURL('image/png');
