@@ -513,14 +513,8 @@
 
     // --- Сохранение карты ---
     document.getElementById('saveMapBtn').addEventListener('click', () => {
-      const dataUrl = canvas.toDataURL('image/png');
-      const link = document.createElement('a');
-      link.download = 'hashtag_territory.png';
-      link.href = dataUrl;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    });
+  saveFullMap('hashtag_territory.png');
+});
 
     // --- Чат (общий) ---
     chatSendBtn.addEventListener('click', async () => {
@@ -1799,6 +1793,45 @@ if (!animating && labelCache) {
       updateLeaderboard();
     }
 
+function saveFullMap(filename = 'hashtag_territory.png') {
+  // Создаём полный canvas
+  const fullCanvas = document.createElement('canvas');
+  fullCanvas.width = MAP_W * CELL_SIZE;
+  fullCanvas.height = MAP_H * CELL_SIZE;
+  const fullCtx = fullCanvas.getContext('2d');
+
+  // Заливаем белым фоном
+  fullCtx.fillStyle = '#ffffff';
+  fullCtx.fillRect(0, 0, fullCanvas.width, fullCanvas.height);
+
+  // Рисуем все клетки
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      const cell = map[y][x];
+      if (cell.ownerId) {
+        const info = playersInfo[cell.ownerId];
+        fullCtx.fillStyle = info ? info.color : '#cccccc';
+      } else if (cell.hashtag) {
+        fullCtx.fillStyle = '#b0b0b0';
+      } else {
+        continue; // оставляем белый фон
+      }
+      fullCtx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+    }
+  }
+
+  // (Опционально) можно добавить подписи, но для простоты оставляем только цветные клетки
+
+  // Сохраняем как PNG
+  const dataUrl = fullCanvas.toDataURL('image/png');
+  const link = document.createElement('a');
+  link.download = filename;
+  link.href = dataUrl;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
     function updateLeaderboard() {
       if (!leaderboard.length) { leaderboardDiv.style.display = 'none'; return; }
       leaderboardDiv.style.display = 'block';
@@ -1957,14 +1990,8 @@ if (!animating && labelCache) {
     }
 
     document.getElementById('saveFinalMapBtn').addEventListener('click', () => {
-      const dataUrl = canvas.toDataURL('image/png');
-      const link = document.createElement('a');
-      link.download = 'hashtag_territory_final.png';
-      link.href = dataUrl;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    });
+  saveFullMap('hashtag_territory_final.png');
+});
 
     // ---------- ИНИЦИАЛИЗАЦИЯ ----------
     startRenderLoop();
