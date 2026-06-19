@@ -2057,22 +2057,25 @@ if (!joinRes.ok) throw new Error(`Ошибка сервера: ${joinRes.status}
   }
 }   
 
-    if (state.gameOver) {
-  // Загружаем финальную карту (если её нет в state, то запрашиваем отдельно)
+ if (state.gameOver) {
+  // Загружаем финальную карту
   if (state.map) {
     map = state.map;
     MAP_W = state.worldW;
     MAP_H = state.worldH;
     if (state.mapVersion !== undefined) currentMapVersion = state.mapVersion;
+    // ★ Обновляем информацию об игроках, лидерборд и лайки
+    if (state.playersInfo) playersInfo = state.playersInfo;
+    if (state.leaderboard) leaderboard = state.leaderboard;
+    if (state.hashtagLikes) hashtagLikes = state.hashtagLikes;
     rebuildOffscreen();
     rebuildTerritoryCache();
     updateAdjacentSet();
     needsRedraw = true;
   } else {
-    // Если карта не пришла в ответе, запрашиваем через /map
+    // Если карта не пришла (маловероятно), можно запросить через /map
     await fetchMap();
   }
-  updateLeaderboard(); // обновить таблицу из state.leaderboard
   hideLoadingScreen();
   showGameEndScreen(state.leaderboard || []);
   return;
